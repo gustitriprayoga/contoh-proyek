@@ -11,6 +11,10 @@ local req = http_request or request or (syn and syn.request) or (fluxus and flux
 -- [1] LOAD WINDUI LIBRARY (Versi Footagesus)
 local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
 
+-- [Webhook Test] \226\157\140 Invalid or missing webhook URL.
+
+local image_embed = "https://cdn.discordapp.com/attachments/1449462744028811499/1449987836756627547/f7f9b6065f0db9b67dff28c80a17acd4_720w_1.gif?ex=695de6e7&is=695c9567&hm=15c22720a777a44b6061441bf6f68f459f07d0bf243aab8caf5e6d0cc6bbcefb&"
+
 -- ====================================================================
 -- CONFIG & DATA
 -- ====================================================================
@@ -58,6 +62,14 @@ local FOCUS_FISH = {
     ["GEMSTONE Ruby"] = {
         Enabled = false,
         Color = 0xFF0040
+    },
+    ["Ruby"] = {
+        Enabled = false,
+        Color = 0xFF0040
+    },
+    ["Evolved Enchan Stone"] = {
+        Enabled = false,
+        Color = 0xDEDE0E
     }
 }
 
@@ -137,9 +149,13 @@ local function testWebhook()
         username = WEBHOOK_NAME,
         avatar_url = WEBHOOK_AVATAR,
         embeds = {{
-            title = "✅ Webhook Connected",
-            description = "WindUI Logger is ready!",
+            title = "✅ Berhasil Terhubung",
+            description = "10s Dev Logger New UI",
             color = 0x2ECC71,
+            fields = {{
+                title = "WEBHOOK",
+                value = "✅  BERHASIL TERHUBUNG"
+            }},
             footer = {
                 text = "10s Area • System"
             },
@@ -157,25 +173,30 @@ local function sendFish(data)
     local focusData = FOCUS_FISH[data.Fish]
     if focusData and focusData.Enabled then
         send({
+            title = "10s Dev | Fish Caught",
+            url = "https://discord.gg/jvGR68CkQj",
             username = WEBHOOK_NAME,
             avatar_url = WEBHOOK_AVATAR,
             embeds = {{
-                title = "🚨 TARGET ACQUIRED! 🚨",
+                title = "🚨 Target Di Temukan! 🚨",
                 description = "**👑 CAUGHT: " .. data.Fish .. " 👑**",
                 color = focusData.Color,
                 fields = {{
                     name = "👤 Player",
-                    value = "`" .. data.Player .. "`",
-                    inline = true
+                    value = "`" .. data.Player .. "`"
+
                 }, {
                     name = "⚖️ Weight",
-                    value = "`" .. data.Weight .. "`",
-                    inline = true
+                    value = "`" .. data.Weight .. "`"
+
                 }, {
                     name = "🎲 Chance",
-                    value = "`1 in " .. data.Chance .. "`",
-                    inline = true
+                    value = "`1 in " .. data.Chance .. "`"
+
                 }},
+                image = {
+                    url = "https://cdn.discordapp.com/attachments/1449462744028811499/1449987836756627547/f7f9b6065f0db9b67dff28c80a17acd4_720w_1.gif?ex=695de6e7&is=695c9567&hm=15c22720a777a44b6061441bf6f68f459f07d0bf243aab8caf5e6d0cc6bbcefb&" or image_embed
+                },
                 footer = {
                     text = "10s Area • Focus Tracker"
                 },
@@ -191,31 +212,35 @@ local function sendFish(data)
             username = WEBHOOK_NAME,
             avatar_url = WEBHOOK_AVATAR,
             embeds = {{
-                title = cfg.Icon .. " " .. data.Rarity .. " Catch!",
-                description = "A rare fish has been caught!",
+                title = cfg.Icon .. " " .. data.Rarity .. " Tertangkap!",
+                description = "Selamat Kamu Berhasil Mendapatkan " .. data.Fish .. "!",
                 color = cfg.Color,
                 fields = {{
                     name = "👤 Player",
-                    value = "`" .. data.Player .. "`",
-                    inline = true
+                    value = "`" .. data.Player .. "`"
+
                 }, {
                     name = "🐟 Fish",
-                    value = "**" .. data.Fish .. "**",
-                    inline = true
+                    value = "**" .. data.Fish .. "**"
+
                 }, {
                     name = "⚖️ Weight",
-                    value = "`" .. data.Weight .. "`",
-                    inline = true
+                    value = "`" .. data.Weight .. "`"
+
                 }, {
                     name = "🎲 Chance",
-                    value = "`1 in " .. data.Chance .. "`",
-                    inline = true
+                    value = "`1 in " .. data.Chance .. "`"
+
                 }},
+                image = {
+                    url = "https://cdn.discordapp.com/attachments/1449462744028811499/1449987836756627547/f7f9b6065f0db9b67dff28c80a17acd4_720w_1.gif?ex=695de6e7&is=695c9567&hm=15c22720a777a44b6061441bf6f68f459f07d0bf243aab8caf5e6d0cc6bbcefb&" or image_embed
+                },
                 footer = {
                     text = "10s Area • Fish Logger"
                 },
                 timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
             }}
+
         })
     end
 end
@@ -228,9 +253,18 @@ local function sendJoinLeave(player, joined)
         username = WEBHOOK_NAME,
         avatar_url = WEBHOOK_AVATAR,
         embeds = {{
-            title = joined and "👋 Player Joined" or "🚪 Player Left",
-            description = "**" .. player.DisplayName .. "** (@" .. player.Name .. ")",
+            title = joined and "👋 Telah Bergabung!" or "🚪 Telah Keluar!",
             color = joined and 0x2ECC71 or 0xE74C3C,
+            fields = {{
+                name = "👤 Player",
+                value = "`" .. player.Name .. "`"
+            }, {
+                name = "👤 Display Name",
+                value = "`" .. player.DisplayName .. "`"
+            }},
+            image = {
+                url = "https://cdn.discordapp.com/attachments/1449462744028811499/1449987836756627547/f7f9b6065f0db9b67dff28c80a17acd4_720w_1.gif?ex=695de6e7&is=695c9567&hm=15c22720a777a44b6061441bf6f68f459f07d0bf243aab8caf5e6d0cc6bbcefb&"
+            },
             footer = {
                 text = "10s Area • Server Activity"
             },
@@ -374,7 +408,7 @@ InfoSection:Paragraph({
 InfoSection:Button({
     Title = "Copy Discord Link",
     Callback = function()
-        setclipboard("https://discord.gg/YOUR_DISCORD_LINK")
+        setclipboard("https://discord.gg/jvGR68CkQj")
         WindUI:Notify({
             Title = "Copied",
             Content = "Link copied!",
@@ -416,7 +450,7 @@ end)
 
 WindUI:Notify({
     Title = "GDEV Logger",
-    Content = "Script loaded. Default webhook configured.",
+    Content = "Berhasil Di Load.",
     Duration = 5,
     Icon = "check"
 })
