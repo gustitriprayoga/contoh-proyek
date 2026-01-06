@@ -172,8 +172,7 @@ local function sendFish(data)
             username = WEBHOOK_NAME,
             avatar_url = WEBHOOK_AVATAR,
             embeds = {{
-                title = "🚨 Target Di Temukan! 🚨",
-                description = "**👑 CAUGHT: " .. data.Fish .. " 👑**",
+                title = "🚨 Target Di Temukan! Kamu Berhasil Mendapatkan " .. data.Fish .. "🚨",
                 color = focusData.Color,
                 fields = {{
                     name = "👤 Player",
