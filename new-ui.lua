@@ -1,0 +1,422 @@
+-- ====================================================================
+-- GDEV LOGGER v9.3 - WindUI Footagesus Edition
+-- ====================================================================
+local Players = game:GetService("Players")
+local HttpService = game:GetService("HttpService")
+local TextChatService = game:GetService("TextChatService")
+local RunService = game:GetService("RunService")
+
+local req = http_request or request or (syn and syn.request) or (fluxus and fluxus.request)
+
+-- [1] LOAD WINDUI LIBRARY (Versi Footagesus)
+local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
+
+-- ====================================================================
+-- CONFIG & DATA
+-- ====================================================================
+
+local DEFAULT_WEBHOOK =
+    "https://discord.com/api/webhooks/1457726463636672512/_LFDG-8cN1tgPAJ8nX2BzkZOCr9CzFOOU1aPhpTl8jgkszzUA3g8x_1b2r5FD-hGPCQf"
+
+local SETTINGS = {
+    WebhookURL = DEFAULT_WEBHOOK, -- Set Default Webhook Here
+    LogFish = false,
+    LogJoinLeave = false
+}
+
+local WEBHOOK_NAME = "10s Area"
+local WEBHOOK_AVATAR = "https://cdn.discordapp.com/attachments/1452251463337377902/1456009509632737417/GDEV_New.png"
+
+local RARITY_CONFIG = {
+    Epic = {
+        Enabled = false,
+        Color = 0xB373F8,
+        Icon = "🟣"
+    },
+    Legendary = {
+        Enabled = false,
+        Color = 0xFFB92B,
+        Icon = "🟡"
+    },
+    Mythic = {
+        Enabled = false,
+        Color = 0xFF1919,
+        Icon = "🔴"
+    },
+    Secret = {
+        Enabled = false,
+        Color = 0x18FF98,
+        Icon = "💎"
+    }
+}
+
+local FOCUS_FISH = {
+    ["Sacred Guardian Squid"] = {
+        Enabled = false,
+        Color = 0x00FBFF
+    },
+    ["GEMSTONE Ruby"] = {
+        Enabled = false,
+        Color = 0xFF0040
+    }
+}
+
+local RGB_RARITY = {
+    ["179,115,248"] = "Epic",
+    ["255,185,43"] = "Legendary",
+    ["255,25,25"] = "Mythic",
+    ["24,255,152"] = "Secret"
+}
+
+-- ====================================================================
+-- LOGIC FUNCTIONS
+-- ====================================================================
+
+local function stripRichText(t)
+    return t:gsub("<.->", "")
+end
+
+local function extractDisplayName(text)
+    local clean = stripRichText(text)
+    return clean:match("^%[Server%]:%s*(.-)%s*obtained") or clean:match("^(.-)%s*obtained") or "Unknown"
+end
+
+local function detectChance(t)
+    return t:match("1 in ([%dKMB]+)") or "?"
+end
+
+local function detectRarity(text)
+    local r, g, b = text:match("rgb%((%d+),%s*(%d+),%s*(%d+)%)")
+    return r and (RGB_RARITY[r .. "," .. g .. "," .. b] or "Other") or "Other"
+end
+
+local function detectFishNameAndWeight(text)
+    local clean = stripRichText(text)
+    local openParen = clean:match("^.*()%(")
+    local fish, weight
+    if openParen then
+        local fishPart = clean:sub(1, openParen - 1)
+        local weightPart = clean:sub(openParen + 1)
+        fish = fishPart:match("obtained%s+a[n]?%s+(.+)") or fishPart:match("obtained%s+(.+)")
+        weight = weightPart:match("^(.-)%)")
+    else
+        fish = clean:match("obtained%s+a[n]?%s+(.+)") or clean:match("obtained%s+(.+)")
+        weight = "-"
+    end
+    return (fish and fish:gsub("%s+$", "") or "Unknown Fish"), (weight or "-")
+end
+
+local function send(payload)
+    if SETTINGS.WebhookURL == "" or not req then
+        return
+    end
+    task.spawn(function()
+        pcall(function()
+            req({
+                Url = SETTINGS.WebhookURL,
+                Method = "POST",
+                Headers = {
+                    ["Content-Type"] = "application/json"
+                },
+                Body = HttpService:JSONEncode(payload)
+            })
+        end)
+    end)
+end
+
+local function testWebhook()
+    if SETTINGS.WebhookURL == "" then
+        WindUI:Notify({
+            Title = "Error",
+            Content = "Webhook URL is empty!",
+            Icon = "alert-circle"
+        })
+        return
+    end
+    send({
+        username = WEBHOOK_NAME,
+        avatar_url = WEBHOOK_AVATAR,
+        embeds = {{
+            title = "✅ Webhook Connected",
+            description = "WindUI Logger is ready!",
+            color = 0x2ECC71,
+            footer = {
+                text = "10s Area • System"
+            },
+            timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
+        }}
+    })
+    WindUI:Notify({
+        Title = "Sent",
+        Content = "Test payload sent.",
+        Icon = "send"
+    })
+end
+
+local function sendFish(data)
+    local focusData = FOCUS_FISH[data.Fish]
+    if focusData and focusData.Enabled then
+        send({
+            username = WEBHOOK_NAME,
+            avatar_url = WEBHOOK_AVATAR,
+            embeds = {{
+                title = "🚨 TARGET ACQUIRED! 🚨",
+                description = "**👑 CAUGHT: " .. data.Fish .. " 👑**",
+                color = focusData.Color,
+                fields = {{
+                    name = "👤 Player",
+                    value = "`" .. data.Player .. "`",
+                    inline = true
+                }, {
+                    name = "⚖️ Weight",
+                    value = "`" .. data.Weight .. "`",
+                    inline = true
+                }, {
+                    name = "🎲 Chance",
+                    value = "`1 in " .. data.Chance .. "`",
+                    inline = true
+                }},
+                footer = {
+                    text = "10s Area • Focus Tracker"
+                },
+                timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
+            }}
+        })
+        return
+    end
+
+    local cfg = RARITY_CONFIG[data.Rarity]
+    if cfg and cfg.Enabled then
+        send({
+            username = WEBHOOK_NAME,
+            avatar_url = WEBHOOK_AVATAR,
+            embeds = {{
+                title = cfg.Icon .. " " .. data.Rarity .. " Catch!",
+                description = "A rare fish has been caught!",
+                color = cfg.Color,
+                fields = {{
+                    name = "👤 Player",
+                    value = "`" .. data.Player .. "`",
+                    inline = true
+                }, {
+                    name = "🐟 Fish",
+                    value = "**" .. data.Fish .. "**",
+                    inline = true
+                }, {
+                    name = "⚖️ Weight",
+                    value = "`" .. data.Weight .. "`",
+                    inline = true
+                }, {
+                    name = "🎲 Chance",
+                    value = "`1 in " .. data.Chance .. "`",
+                    inline = true
+                }},
+                footer = {
+                    text = "10s Area • Fish Logger"
+                },
+                timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
+            }}
+        })
+    end
+end
+
+local function sendJoinLeave(player, joined)
+    if not SETTINGS.LogJoinLeave then
+        return
+    end
+    send({
+        username = WEBHOOK_NAME,
+        avatar_url = WEBHOOK_AVATAR,
+        embeds = {{
+            title = joined and "👋 Player Joined" or "🚪 Player Left",
+            description = "**" .. player.DisplayName .. "** (@" .. player.Name .. ")",
+            color = joined and 0x2ECC71 or 0xE74C3C,
+            footer = {
+                text = "10s Area • Server Activity"
+            },
+            timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
+        }}
+    })
+end
+
+-- ====================================================================
+-- WINDUI CONSTRUCTION
+-- ====================================================================
+
+local Window = WindUI:CreateWindow({
+    Title = "GDEV LOGGER",
+    Icon = "fish",
+    Author = "10s Area",
+    Folder = "GDEVLogger",
+    Transparent = true
+})
+
+-- [2] EDIT OPEN BUTTON (Minimize Button Config)
+Window:EditOpenButton({
+    Title = "Open Logger",
+    Icon = "fish-symbol",
+    CornerRadius = UDim.new(0, 16),
+    StrokeThickness = 2,
+    Color = ColorSequence.new(Color3.fromHex("FF0F7B"), Color3.fromHex("F89B29")),
+    OnlyMobile = false,
+    Enabled = true,
+    Draggable = true
+})
+
+-- TABS
+local DashboardTab = Window:Tab({
+    Title = "Dashboard",
+    Icon = "layout-dashboard"
+})
+local SettingsTab = Window:Tab({
+    Title = "Settings",
+    Icon = "settings"
+})
+local InfoTab = Window:Tab({
+    Title = "Information",
+    Icon = "info"
+})
+
+-- >> DASHBOARD TAB
+local WebhookSection = DashboardTab:Section({
+    Title = "Webhook Configuration",
+    Icon = "link"
+})
+
+WebhookSection:Input({
+    Title = "Webhook URL",
+    Desc = "Default webhook is already set",
+    Value = SETTINGS.WebhookURL,
+    Placeholder = "https://discord.com/...",
+    Callback = function(text)
+        SETTINGS.WebhookURL = text
+    end
+})
+
+WebhookSection:Button({
+    Title = "Test Connection",
+    Desc = "Send a test message",
+    Callback = testWebhook
+})
+
+local ControlSection = DashboardTab:Section({
+    Title = "Main Controls",
+    Icon = "power"
+})
+
+ControlSection:Toggle({
+    Title = "Enable Fish Logger",
+    Desc = "Master switch to start reading chat logs",
+    Value = SETTINGS.LogFish,
+    Callback = function(val)
+        SETTINGS.LogFish = val
+    end
+})
+
+ControlSection:Toggle({
+    Title = "Log Join/Leave",
+    Desc = "Notify when players enter or exit",
+    Value = SETTINGS.LogJoinLeave,
+    Callback = function(val)
+        SETTINGS.LogJoinLeave = val
+    end
+})
+
+-- >> SETTINGS TAB
+local FocusSection = SettingsTab:Section({
+    Title = "Focus Targets",
+    Icon = "crosshair"
+})
+FocusSection:Paragraph({
+    Title = "Info",
+    Content = "These fish will be logged with priority ping."
+})
+
+for fishName, config in pairs(FOCUS_FISH) do
+    FocusSection:Toggle({
+        Title = "Focus: " .. fishName,
+        Value = config.Enabled,
+        Callback = function(val)
+            config.Enabled = val
+        end
+    })
+end
+
+local RaritySection = SettingsTab:Section({
+    Title = "Rarity Filters",
+    Icon = "filter"
+})
+local RarityOrder = {"Epic", "Legendary", "Mythic", "Secret"}
+
+for _, rarityName in ipairs(RarityOrder) do
+    local config = RARITY_CONFIG[rarityName]
+    if config then
+        RaritySection:Toggle({
+            Title = "Log " .. rarityName,
+            Desc = "Rarity Color: " .. config.Icon,
+            Value = config.Enabled,
+            Callback = function(val)
+                config.Enabled = val
+            end
+        })
+    end
+end
+
+-- >> INFO TAB
+local InfoSection = InfoTab:Section({
+    Title = "About",
+    Icon = "book-open"
+})
+InfoSection:Paragraph({
+    Title = "GDEV LOGGER v9.3",
+    Content = "Focus Tracking enabled.\nUsing WindUI (Footagesus Fork)."
+})
+InfoSection:Button({
+    Title = "Copy Discord Link",
+    Callback = function()
+        setclipboard("https://discord.gg/YOUR_DISCORD_LINK")
+        WindUI:Notify({
+            Title = "Copied",
+            Content = "Link copied!",
+            Icon = "copy"
+        })
+    end
+})
+
+-- ====================================================================
+-- LISTENERS
+-- ====================================================================
+
+TextChatService.OnIncomingMessage = function(msg)
+    if not SETTINGS.LogFish then
+        return
+    end
+    if not msg.Text or not msg.Text:find("obtained") then
+        return
+    end
+
+    local fishName, weight = detectFishNameAndWeight(msg.Text)
+    local rarity = detectRarity(msg.Text)
+
+    sendFish({
+        Player = extractDisplayName(msg.Text),
+        Fish = fishName,
+        Weight = weight,
+        Chance = detectChance(msg.Text),
+        Rarity = rarity
+    })
+end
+
+Players.PlayerAdded:Connect(function(player)
+    sendJoinLeave(player, true)
+end)
+Players.PlayerRemoving:Connect(function(player)
+    sendJoinLeave(player, false)
+end)
+
+WindUI:Notify({
+    Title = "GDEV Logger",
+    Content = "Script loaded. Default webhook configured.",
+    Duration = 5,
+    Icon = "check"
+})
