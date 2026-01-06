@@ -1,5 +1,5 @@
 -- ====================================================================
--- GDEV LOGGER v9.6 - Enchant Update
+-- GDEV LOGGER v9.7 - Fix Double Log & Enchant
 -- ====================================================================
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
@@ -20,7 +20,7 @@ local DEFAULT_WEBHOOK = "https://discord.com/api/webhooks/1457726463636672512/_L
 local SETTINGS = {
     WebhookURL = DEFAULT_WEBHOOK,
     LogFish = false,
-    LogEnchant = false, -- [NEW] Setting Enchant
+    LogEnchant = false, 
     LogJoinLeave = false
 }
 
@@ -84,10 +84,9 @@ local function detectFishNameAndWeight(text)
     return (fish and fish:gsub("%s+$", "") or "Unknown Fish"), (weight or "-")
 end
 
--- [NEW] Function detect Enchant
 local function detectEnchantData(text)
     local clean = stripRichText(text)
-    -- Pattern: [Server]: Alice4JAV rolled a Stormhunter I Enchant on their Diamond Rod!
+    -- Pattern: [Server]: Player rolled a Enchant on their Rod!
     local player, enchant, rod = clean:match("^%[Server%]:%s*(.-)%s+rolled%s+a%s+(.-)%s+on%s+their%s+(.-)!$")
     return player, enchant, rod
 end
@@ -120,23 +119,19 @@ local function testWebhook()
     WindUI:Notify({ Title = "Sent", Content = "Test payload sent.", Icon = "send" })
 end
 
--- [NEW] Send Enchant Webhook
 local function sendEnchant(data)
     send({
         username = WEBHOOK_NAME,
         embeds = {{
             title = "✨ ENCHANTMENT ROLLED! ✨",
             description = "**" .. data.Player .. "** Kamu Berhasil Mendapatkan Enchant Baru !",
-            color = 0xD000FF, -- Warna Ungu Magic
+            color = 0xD000FF,
             fields = {
                 { name = "🧙 Player", value = "`" .. data.Player .. "`", inline = true },
                 { name = "🔮 Enchant", value = "`" .. data.Enchant .. "`", inline = true },
                 { name = "🎣 Rod", value = "`" .. data.Rod .. "`", inline = true }
             },
             thumbnail = { url = IMAGE_EMBED },
-            {
-                iamge = { url = IMAGE_EMBED },
-            },
             footer = { text = "10s Area • Enchant Logger" },
             timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
         }}
@@ -145,7 +140,6 @@ end
 
 local function sendFish(data)
     local focusData = FOCUS_FISH[data.Fish]
-    -- 1. PRIORITY LOG (FOCUS)
     if focusData and focusData.Enabled then
         send({
             username = WEBHOOK_NAME, avatar_url = WEBHOOK_AVATAR,
@@ -165,7 +159,7 @@ local function sendFish(data)
         })
         return
     end
-    -- 2. RARITY LOG
+    
     local cfg = RARITY_CONFIG[data.Rarity]
     if cfg and cfg.Enabled then
         send({
@@ -260,7 +254,6 @@ ControlSection:Toggle({
     Callback = function(val) SETTINGS.LogFish = val end
 })
 
--- [NEW] Toggle Enchant
 ControlSection:Toggle({
     Title = "Enable Enchant Logger",
     Desc = "Log when players roll enchants",
@@ -304,7 +297,7 @@ end
 
 -- >> INFO
 local InfoSection = InfoTab:Section({ Title = "About", Icon = "book-open" })
-InfoSection:Paragraph({ Title = "GDEV LOGGER v9.6", Content = "Added Enchant Logger.\nUsing WindUI (Footagesus Fork)." })
+InfoSection:Paragraph({ Title = "GDEV LOGGER v9.7", Content = "Fix: Double Log & Syntax Error.\nUsing WindUI (Footagesus Fork)." })
 InfoSection:Button({
     Title = "Copy Discord Link",
     Callback = function()
@@ -314,18 +307,30 @@ InfoSection:Button({
 })
 
 -- ====================================================================
--- LISTENERS (LOGIC UTAMA)
+-- LISTENERS (FIXED ANTI-DUPLICATE)
 -- ====================================================================
+
+-- Variable untuk menyimpan pesan terakhir agar tidak diproses ulang
+local LastMsg = ""
+local LastTime = 0
 
 local function ProcessText(text)
     if not text then return end
+
+    -- [ANTI-DUPLICATE CHECK]
+    -- Jika pesan SAMA PERSIS dengan pesan terakhir DAN waktunya kurang dari 1 detik, STOP.
+    if text == LastMsg and (os.clock() - LastTime) < 1 then 
+        return 
+    end
+
+    -- Simpan pesan ini sebagai pesan terakhir
+    LastMsg = text
+    LastTime = os.clock()
 
     -- [CHECK 1] LOG FISH
     if SETTINGS.LogFish and text:find("obtained") then
         local fishName, weight = detectFishNameAndWeight(text)
         local rarity = detectRarity(text)
-        
-        -- Filter Rarity/Focus
         if rarity == "Other" and not FOCUS_FISH[fishName] then return end
 
         sendFish({
@@ -337,8 +342,7 @@ local function ProcessText(text)
         })
     end
 
-    -- [CHECK 2] LOG ENCHANT (NEW)
-    -- Format: [Server]: Player rolled a Enchant on their Rod!
+    -- [CHECK 2] LOG ENCHANT
     if SETTINGS.LogEnchant and text:find("rolled a") and text:find("on their") then
         local player, enchant, rod = detectEnchantData(text)
         if player and enchant and rod then
@@ -347,12 +351,10 @@ local function ProcessText(text)
     end
 end
 
--- Listener Modern Chat
 TextChatService.MessageReceived:Connect(function(textChatMessage)
     ProcessText(textChatMessage.Text)
 end)
 
--- Listener Legacy Chat (System Message)
 TextChatService.OnIncomingMessage = function(textChatMessage)
     if textChatMessage.Status == Enum.TextChatMessageStatus.Success then
         ProcessText(textChatMessage.Text)
@@ -364,7 +366,7 @@ Players.PlayerRemoving:Connect(function(player) sendJoinLeave(player, false) end
 
 WindUI:Notify({
     Title = "GDEV Logger",
-    Content = "Script Loaded (Fish + Enchant Support)",
+    Content = "Fix Applied: No more double logs!",
     Duration = 5,
     Icon = "check"
 })
