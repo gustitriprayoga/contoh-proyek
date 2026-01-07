@@ -1,5 +1,5 @@
 -- ====================================================================
--- GDEV LOGGER v22.0 - MINIMIZABLE UI & JOIN LOGS
+-- GDEV LOGGER v22.0 (MODIFIED) - SPECIFIC USER TAGS IN EMBED
 -- ====================================================================
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
@@ -16,6 +16,22 @@ local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/rel
 -- [2] CONFIG DATA
 local IMAGE_EMBED =
     "https://cdn.discordapp.com/attachments/1449462744028811499/1449987836756627547/f7f9b6065f0db9b67dff28c80a17acd4_720w_1.gif"
+
+-- [[ BAGIAN INI DITAMBAHKAN: USER MAPPING ]] --
+local USER_MAPPING = {
+    -- GROUP 1 (Alice & Friends)
+    ["Alice4JAV"] = "425852550672023552",
+    ["Lia4JAV"] = "425852550672023552",
+    ["Ti4JAV"] = "425852550672023552",
+    ["Lya4JAV"] = "425852550672023552",
+    ["Clay4JAV"] = "425852550672023552",
+
+    -- GROUP 2 (Apuk)
+    ["AbgRIchOmon"] = "592612835960422411",
+    ["PriaTerzolimi22"] = "592612835960422411",
+    ["NanikAAA4JAV"] = "592612835960422411",
+    ["Hana4JAV"] = "592612835960422411"
+}
 
 local SETTINGS = {
     WebhookCatch = "https://discord.com/api/webhooks/1457726463636672512/_LFDG-8cN1tgPAJ8nX2BzkZOCr9CzFOOU1aPhpTl8jgkszzUA3g8x_1b2r5FD-hGPCQf",
@@ -148,6 +164,14 @@ local function send(url, payload)
     end)
 end
 
+-- [[ FUNGSI GET TAG ]] --
+local function GetMentionContent(playerName)
+    if USER_MAPPING[playerName] then
+        return "<@" .. USER_MAPPING[playerName] .. ">"
+    end
+    return ""
+end
+
 local function testWebhook(url, category)
     if url == "" then
         WindUI:Notify({
@@ -238,7 +262,7 @@ local function detectEnchantData(text)
 end
 
 -- ====================================================================
--- [5] SENDING LOGIC (Unified)
+-- [5] SENDING LOGIC (Modified for Tag Inside Embed)
 -- ====================================================================
 
 local function IsItemFocused(itemName)
@@ -259,7 +283,7 @@ local function sendCatchLog(data)
     local rarityCfg = RARITY_CONFIG[data.Rarity] or RARITY_CONFIG["Unknown"]
     local shouldSend = false
     local embedColor = rarityCfg.Color
-    local titleText = rarityCfg.Icon .. " " .. data.Rarity .. " | Berhasil Berhasil Di Dapatkan "
+    local titleText = rarityCfg.Icon .. " " .. data.Rarity .. " | Berhasil Di Temukan! "
 
     if IsItemFocused(data.Item) then
         shouldSend = true
@@ -273,28 +297,37 @@ local function sendCatchLog(data)
     end
 
     if shouldSend then
+        -- Ambil Tag
+        local userTag = GetMentionContent(data.Player)
+        local tagString = (userTag ~= "") and (userTag .. "\n") or ""
+
         send(SETTINGS.WebhookCatch, {
             username = WEBHOOK_NAME,
             avatar_url = WEBHOOK_AVATAR,
             embeds = {{
                 title = titleText,
-                description = "Selamat Kamu Berhasil Mendapatkan : **" .. data.Item .. "**",
+                -- Ping dimasukkan di awal deskripsi embed
+                description = "Selamat ".. tagString .." Kamu Berhasil Mendapatkan : **" .. data.Item .. "**",
                 color = embedColor,
                 fields = {{
-                    name = "👤 Player",
-                    value = "`" .. data.Player .. "`"
+                    name = "❯ 👤 Player :",
+                    value = "```" .. data.Player .. "```"
                 }, {
-                    name = "📦 Item/Fish",
-                    value = "`" .. data.Item .. "`"
+                    name = "❯ 🐟 Item/Fish :",
+                    value = "```" .. data.Item .. "```"
                 }, {
-                    name = "⚖️ Weight",
-                    value = "`" .. data.Weight .. "`"
+                    name = "❯ ⚖️ Weight :",
+                    value = "```" .. data.Weight .. "```"
                 }, {
-                    name = "🎲 Chance",
-                    value = "`1 in " .. data.Chance .. "`"
+                    name = "❯ 🎲 Chance :",
+                    value = "```1 in " .. data.Chance .. "```"
                 }},
-                thumbnail = {
+                image = {
                     url = IMAGE_EMBED
+                },
+                footer = {
+                    text = "10s Area • Enchant Logger",
+                    inline = true
                 },
                 timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
             }}
@@ -303,24 +336,34 @@ local function sendCatchLog(data)
 end
 
 local function sendEnchant(data)
+    -- Ambil Tag
+    local userTag = GetMentionContent(data.Player)
+    local tagString = (userTag ~= "") and (userTag .. "\n") or ""
+
     send(SETTINGS.WebhookEnchant, {
         username = WEBHOOK_NAME,
         embeds = {{
             title = "✨ ENCHANT ROLLED ✨",
-            description = "**" .. data.Player .. "** Telah Mendapatkan Enchant Baru **" .. data.Enchant .. "**",
+            -- Ping dimasukkan di awal deskripsi embed
+            description = "**" .. data.Player .. "** Telah Mendapatkan Enchant Baru **" .. data.Enchant ..
+                "**",
             color = 0xD000FF,
             fields = {{
-                name = "👤 Player",
-                value = "`" .. data.Player .. "`"
+                name = "❯ 👤 Player :",
+                value = "```" .. data.Player .. "```"
             }, {
-                name = "🔮 Enchant",
-                value = "`" .. data.Enchant .. "`"
+                name = "❯ 🔮 Enchant :",
+                value = "```" .. data.Enchant .. "```"
             }, {
-                name = "🎣 Rod",
-                value = "`" .. data.Rod .. "`"
+                name = "❯ 🎣 Rod :",
+                value = "```" .. data.Rod .. "```"
             }},
             image = {
                 url = IMAGE_EMBED
+            },
+            footer = {
+                text = "10s Area • Enchant Logger",
+                inline = true
             },
             timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
         }}
@@ -333,7 +376,7 @@ local function sendJoinLeave(player, joined)
     end
 
     local title = joined and "👋 PLAYER TELAH BERGABUNG" or "🚪 PLAYER TELAH KELUAR"
-    local color = joined and 0x00FF00 or 0xFF0000 -- Green / Red
+    local color = joined and 0x00FF00 or 0xFF0000
 
     send(SETTINGS.WebhookJoinLeave, {
         username = WEBHOOK_NAME,
@@ -342,11 +385,11 @@ local function sendJoinLeave(player, joined)
             description = "`" .. player.Name .. "` (" .. player.DisplayName .. ")",
             color = color,
             fields = {{
-                name = "🆔 User ID",
+                name = "❯ 🆔 User ID",
                 value = "`" .. player.UserId .. "`",
                 inline = true
             }, {
-                name = "📅 Account Age",
+                name = "❯ 📅 Account Age",
                 value = player.AccountAge .. " days",
                 inline = true
             }},
@@ -371,7 +414,6 @@ local Window = WindUI:CreateWindow({
     Transparent = true
 })
 
--- >> MINIMIZE BUTTON CONFIGURATION <<
 Window:EditOpenButton({
     Title = "Open Logger",
     Icon = "monitor",
@@ -383,7 +425,6 @@ Window:EditOpenButton({
     Draggable = true
 })
 
--- >> VERSION TAG <<
 Window:Tag({
     Title = "v22.0",
     Icon = "github",
@@ -391,7 +432,6 @@ Window:Tag({
     Radius = 0
 })
 
--- >> TABS <<
 local TrackerTab = Window:Tab({
     Title = "Tracker",
     Icon = "crosshair"
@@ -405,7 +445,6 @@ local InfoTab = Window:Tab({
     Icon = "info"
 })
 
--- >> TAB 1: TRACKER (FOCUS & FILTERS) <<
 local FocusSec = TrackerTab:Section({
     Title = "Target Database",
     Icon = "database"
@@ -461,7 +500,6 @@ for _, rarity in ipairs({"Epic", "Legendary", "Mythic", "Secret"}) do
     })
 end
 
--- >> TAB 2: SETTINGS (WEBHOOKS & TOGGLES) <<
 local ToggleSec = SettingsTab:Section({
     Title = "Main Toggles",
     Icon = "power"
@@ -505,7 +543,6 @@ WebhookSec:Button({
         testWebhook(SETTINGS.WebhookCatch, "Catch")
     end
 })
-
 WebhookSec:Input({
     Title = "Webhook Enchant",
     Value = SETTINGS.WebhookEnchant,
@@ -519,7 +556,6 @@ WebhookSec:Button({
         testWebhook(SETTINGS.WebhookEnchant, "Enchant")
     end
 })
-
 WebhookSec:Input({
     Title = "Webhook Join/Leave",
     Value = SETTINGS.WebhookJoinLeave,
@@ -534,7 +570,6 @@ WebhookSec:Button({
     end
 })
 
--- >> TAB 3: INFORMATION <<
 local InfoSec = InfoTab:Section({
     Title = "About Script",
     Icon = "file-text"
@@ -561,7 +596,6 @@ InfoSec:Button({
     end
 })
 
--- >> SCANNER BACKGROUND <<
 task.spawn(function()
     local fish, stones = ScanDatabaseStrict()
     GlobalData.ListFish = fish
@@ -633,7 +667,6 @@ local function ProcessText(text)
     end
 end
 
--- Chat Listener
 TextChatService.OnIncomingMessage = function(message)
     if message.TextSource then
         return
@@ -648,7 +681,6 @@ TextChatService.MessageReceived:Connect(function(msg)
     end
 end)
 
--- Join/Leave Listener
 Players.PlayerAdded:Connect(function(p)
     sendJoinLeave(p, true)
 end)
