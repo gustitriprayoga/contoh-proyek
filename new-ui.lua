@@ -30,9 +30,12 @@ local WEBHOOK_NAME = "10s Area"
 local WEBHOOK_AVATAR = "https://cdn.discordapp.com/attachments/1452251463337377902/1456009509632737417/GDEV_New.png"
 
 local RARITY_CONFIG = {
-    Epic      = { Enabled = false, Color = 0xB373F8, Icon = "🟣" },
-    Legendary = { Enabled = false, Color = 0xFFB92B, Icon = "🟡" },
-    Mythic    = { Enabled = false, Color = 0xFF1919, Icon = "🔴" },
+    Uncommon  = { Enabled = false, Color = 0xCCCCCC, Icon = "⬜" },
+    Common    = { Enabled = false, Color = 0x00FF00, Icon = "🟩" },
+    Rare      = { Enabled = false, Color = 0x3D85C6, Icon = "🟦" },
+    Epic      = { Enabled = false, Color = 0xB373F8, Icon = "🟪" },
+    Legendary = { Enabled = false, Color = 0xFFB92B, Icon = "🟨" },
+    Mythic    = { Enabled = false, Color = 0xFF1919, Icon = "🟥" },
     Secret    = { Enabled = false, Color = 0x18FF98, Icon = "💎" },
 }
 
