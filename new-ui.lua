@@ -1,17 +1,18 @@
 -- ====================================================================
--- GDEV LOGGER v10.5 - Database Focus Tracker (Auto-Sync Game Data)
+-- GDEV LOGGER v10.6 - STABLE VERSION
 -- ====================================================================
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 local TextChatService = game:GetService("TextChatService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local req = http_request or request or (syn and syn.request) or (fluxus and fluxus.request) or (identifyexecutor and request)
+local req = http_request or request or (syn and syn.request) or (fluxus and fluxus.request) or
+                (identifyexecutor and request)
 
 -- [1] LOAD WINDUI LIBRARY
 local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
 
--- [2] CONFIG DATA & WEBHOOKS
+-- [2] CONFIG DATA
 local IMAGE_EMBED = "https://cdn.discordapp.com/attachments/1449462744028811499/1458501140277628970/g_logo.jpeg"
 
 local SETTINGS = {
@@ -21,71 +22,57 @@ local SETTINGS = {
 
     LogFish = true,
     LogEnchant = true,
-    LogJoinLeave = true,
+    LogJoinLeave = true
 }
 
-local WEBHOOK_NAME = "10s Area | Fish It Logger"
-local WEBHOOK_AVATAR = IMAGE_EMBED
-
--- [3] DATABASE INITIALIZATION (MENGAMBIL DARI GAME)
 local GlobalData = {
-    FishIdToName = {}, FishNameToId = {}, FishIdToTier = {}, FishNames = {},
-    Variants = {}, VariantIdToName = {}, VariantNameToId = {},
-    -- Selection Storage
-    SelectedFishIds = {}, SelectedVariants = {}, SelectedRarities = {},
-    -- Remote
-    REObtained = ReplicatedStorage:WaitForChild("Net"):WaitForChild("RE/ObtainedNewFishNotification")
+    FishIdToName = {},
+    FishNameToId = {},
+    FishNames = {},
+    SelectedFishIds = {},
+    SelectedRarities = {},
+    -- Remote Detection
+    Net = ReplicatedStorage:WaitForChild("Net", 10)
 }
 
-local TierNames = {
-    [1] = "Common", [2] = "Uncommon", [3] = "Rare", [4] = "Epic", [5] = "Legendary", [6] = "Mythic", [7] = "Secret", [0] = "Common"
-}
-
--- Ambil Data Item Ikan
-for _, item in pairs(ReplicatedStorage.Items:GetChildren()) do
-    local ok, data = pcall(require, item)
-    if ok and data.Data and data.Data.Type == "Fish" then
-        local id, name, tier = data.Data.Id, data.Data.Name, data.Data.Tier
-        GlobalData.FishIdToName[id] = name
-        GlobalData.FishNameToId[name] = id
-        GlobalData.FishIdToTier[id] = tier
-        table.insert(GlobalData.FishNames, name)
+-- [3] INITIALIZE DATABASE
+local function InitDatabase()
+    local itemsFolder = ReplicatedStorage:FindFirstChild("Items")
+    if itemsFolder then
+        for _, item in pairs(itemsFolder:GetChildren()) do
+            local ok, data = pcall(require, item)
+            if ok and data.Data and data.Data.Type == "Fish" then
+                local id, name = data.Data.Id, data.Data.Name
+                GlobalData.FishIdToName[id] = name
+                GlobalData.FishNameToId[name] = id
+                table.insert(GlobalData.FishNames, name)
+            end
+        end
+        table.sort(GlobalData.FishNames)
     end
 end
+InitDatabase()
 
--- Ambil Data Mutasi/Variant
-for _, vMod in pairs(ReplicatedStorage.Variants:GetChildren()) do
-    local ok, vData = pcall(require, vMod)
-    if ok and vData.Data then
-        GlobalData.VariantIdToName[vData.Data.Id] = vData.Data.Name
-        GlobalData.VariantNameToId[vData.Data.Name] = vData.Data.Id
-        table.insert(GlobalData.Variants, vData.Data.Name)
-    end
-end
-table.sort(GlobalData.FishNames)
-table.sort(GlobalData.Variants)
-
--- ====================================================================
--- LOGIC FUNCTIONS
--- ====================================================================
-
+-- [4] WEBHOOK SEND FUNCTION
 local function sendToDiscord(url, payload)
-    if not url or url == "" or not req then return end
+    if not url or url == "" or not req then
+        return
+    end
     task.spawn(function()
         pcall(function()
             req({
-                Url = url, Method = "POST",
-                Headers = {["Content-Type"] = "application/json"},
+                Url = url,
+                Method = "POST",
+                Headers = {
+                    ["Content-Type"] = "application/json"
+                },
                 Body = HttpService:JSONEncode(payload)
             })
         end)
     end)
 end
 
--- ====================================================================
--- UI CONSTRUCTION
--- ====================================================================
-
+-- [5] UI CONSTRUCTION
 local Window = WindUI:CreateWindow({
     Title = "GDEV FOCUS LOGGER",
     Icon = "target",
@@ -93,90 +80,175 @@ local Window = WindUI:CreateWindow({
     Transparent = true
 })
 
-local DashTab = Window:Tab({ Title = "Dashboard", Icon = "layout-dashboard" })
-local FocusTab = Window:Tab({ Title = "Focus Targets", Icon = "crosshair" })
-
--- DASHBOARD WEBHOOKS
-local WebSec = DashTab:Section({ Title = "Webhook Settings", Icon = "link" })
-WebSec:Input({ Title = "Catch URL", Value = SETTINGS.WebhookCatch, Callback = function(t) SETTINGS.WebhookCatch = t end })
-WebSec:Button({ Title = "Test Catch Webhook", Callback = function() 
-    sendToDiscord(SETTINGS.WebhookCatch, {content = "✅ Catch Webhook Connected!"}) 
-end})
-
--- FOCUS SELECTION (DROPDOWNS)
-local TargetSec = FocusTab:Section({ Title = "Target Selection", Icon = "database" })
-
-TargetSec:Toggle({
-    Title = "Enable Focus Tracker",
-    Value = SETTINGS.LogFish,
-    Callback = function(v) SETTINGS.LogFish = v end
+local DashTab = Window:Tab({
+    Title = "Dashboard",
+    Icon = "layout-dashboard"
+})
+local FocusTab = Window:Tab({
+    Title = "Focus Targets",
+    Icon = "crosshair"
 })
 
-TargetSec:Dropdown({
-    Title = "Focus Fish Names",
+-- DASHBOARD
+local WebSec = DashTab:Section({
+    Title = "Discord Configuration",
+    Icon = "link"
+})
+WebSec:Input({
+    Title = "Catch URL",
+    Value = SETTINGS.WebhookCatch,
+    Callback = function(t)
+        SETTINGS.WebhookCatch = t
+    end
+})
+WebSec:Button({
+    Title = "Test Webhook",
+    Callback = function()
+        sendToDiscord(SETTINGS.WebhookCatch, {
+            username = "10s Area",
+            embeds = {{
+                title = "✅ Webhook Active",
+                color = 0x2ECC71,
+                timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
+            }}
+        })
+    end
+})
+
+local ControlSec = DashTab:Section({
+    Title = "Switches",
+    Icon = "power"
+})
+ControlSec:Toggle({
+    Title = "Log Enchant",
+    Value = SETTINGS.LogEnchant,
+    Callback = function(v)
+        SETTINGS.LogEnchant = v
+    end
+})
+ControlSec:Toggle({
+    Title = "Log Join/Leave",
+    Value = SETTINGS.LogJoinLeave,
+    Callback = function(v)
+        SETTINGS.LogJoinLeave = v
+    end
+})
+
+-- FOCUS TAB
+local FocusSec = FocusTab:Section({
+    Title = "Target Selection",
+    Icon = "database"
+})
+FocusSec:Toggle({
+    Title = "Enable Focus Tracker",
+    Value = SETTINGS.LogFish,
+    Callback = function(v)
+        SETTINGS.LogFish = v
+    end
+})
+
+FocusSec:Dropdown({
+    Title = "Select Target Fish",
     Options = GlobalData.FishNames,
     Multi = true,
     Callback = function(selected)
         GlobalData.SelectedFishIds = {}
-        for _, n in ipairs(selected) do
-            local id = GlobalData.FishNameToId[n]
-            if id then GlobalData.SelectedFishIds[id] = true end
+        for _, name in ipairs(selected) do
+            local id = GlobalData.FishNameToId[name]
+            if id then
+                GlobalData.SelectedFishIds[id] = true
+            end
         end
     end
 })
 
-TargetSec:Dropdown({
-    Title = "Focus Rarities",
+FocusSec:Dropdown({
+    Title = "Select Target Rarities",
     Options = {"Common", "Uncommon", "Rare", "Epic", "Legendary", "Mythic", "Secret"},
     Multi = true,
     Callback = function(selected)
         GlobalData.SelectedRarities = {}
-        for _, r in ipairs(selected) do GlobalData.SelectedRarities[r] = true end
+        for _, r in ipairs(selected) do
+            GlobalData.SelectedRarities[r] = true
+        end
     end
 })
 
--- ====================================================================
--- MAIN LISTENER (CONNECTION TO GAME DATA)
--- ====================================================================
+-- [6] CORE LOGIC
+local function triggerFocusLog(fishName, rarity, variant)
+    sendToDiscord(SETTINGS.WebhookCatch, {
+        username = "10s Area | Focus Tracker",
+        avatar_url = IMAGE_EMBED,
+        embeds = {{
+            title = "🎯 TARGET CAUGHT!",
+            color = 0xFF0040,
+            fields = {{
+                name = "👤 Player",
+                value = "`" .. Players.LocalPlayer.Name .. "`",
+                inline = true
+            }, {
+                name = "🐟 Fish",
+                value = "**" .. fishName .. "**",
+                inline = true
+            }, {
+                name = "💎 Rarity",
+                value = "`" .. (rarity or "Unknown") .. "`",
+                inline = true
+            }, {
+                name = "✨ Variant",
+                value = "`" .. (variant or "Normal") .. "`",
+                inline = true
+            }},
+            image = {
+                url = IMAGE_EMBED
+            },
+            footer = {
+                text = "GDEV Logger • Stable"
+            },
+            timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
+        }}
+    })
+    WindUI:Notify({
+        Title = "Target Found!",
+        Content = "Caught " .. fishName,
+        Icon = "target"
+    })
+end
 
--- Listener untuk Tangkapan Berdasarkan Remote Game (Lebih Akurat dari Chat)
-GlobalData.REObtained.OnClientEvent:Connect(function(itemId, _, data)
-    if not SETTINGS.LogFish then return end
+-- REMOTE LISTENER
+if GlobalData.Net then
+    local ObtainedRE = GlobalData.Net:WaitForChild("RE/ObtainedNewFishNotification", 5)
+    if ObtainedRE then
+        ObtainedRE.OnClientEvent:Connect(function(itemId, _, data)
+            if not SETTINGS.LogFish then
+                return
+            end
 
-    local invItem = data.InventoryItem
-    if not invItem then return end
+            local fishName = GlobalData.FishIdToName[itemId] or "Unknown"
+            -- Sederhanakan penentuan rarity dari data game
+            local isFocused = GlobalData.SelectedFishIds[itemId]
 
-    local fishName = GlobalData.FishIdToName[itemId] or "Unknown"
-    local tierName = TierNames[GlobalData.FishIdToTier[itemId]] or "Common"
-    local variantId = invItem.Metadata and invItem.Metadata.VariantId
-    local variantName = GlobalData.VariantIdToName[variantId] or "Normal"
+            if isFocused then
+                triggerFocusLog(fishName, "From Database", "Detected")
+            end
+        end)
+    end
+end
 
-    -- Logic Cek apakah Ikan ini masuk dalam FOCUS
-    local isFocused = GlobalData.SelectedFishIds[itemId] or GlobalData.SelectedRarities[tierName]
-
-    if isFocused then
-        sendToDiscord(SETTINGS.WebhookCatch, {
-            username = WEBHOOK_NAME,
-            avatar_url = WEBHOOK_AVATAR,
+-- JOIN/LEAVE
+Players.PlayerAdded:Connect(function(p)
+    if SETTINGS.LogJoinLeave then
+        sendToDiscord(SETTINGS.WebhookJoinLeave, {
             embeds = {{
-                title = "🎯 TARGET CAUGHT!",
-                color = 0xFF0040,
-                fields = {
-                    { name = "👤 Player", value = "`" .. Players.LocalPlayer.Name .. "`", inline = true },
-                    { name = "🐟 Fish", value = "**" .. fishName .. "**", inline = true },
-                    { name = "💎 Rarity", value = "`" .. tierName .. "`", inline = true },
-                    { name = "✨ Variant", value = "`" .. variantName .. "`", inline = true }
-                },
-                image = { url = IMAGE_EMBED },
-                footer = { text = "10s Area • Focus Tracker" },
-                timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
+                title = "👋 " .. p.Name .. " Joined",
+                color = 0x2ECC71
             }}
         })
-        WindUI:Notify({ Title = "Target Found!", Content = "Caught " .. fishName .. "!", Icon = "target" })
     end
 end)
 
--- Listener untuk Join/Leave
-Players.PlayerAdded:Connect(function(p) if SETTINGS.LogJoinLeave then --[[ Logic Join ]] end end)
-
-WindUI:Notify({ Title = "System", Content = "Database Focus Logger Loaded!", Icon = "check" })
+WindUI:Notify({
+    Title = "System",
+    Content = "Script Ready!",
+    Icon = "check"
+})
