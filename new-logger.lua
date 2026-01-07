@@ -307,7 +307,7 @@ local function sendCatchLog(data)
             embeds = {{
                 title = titleText,
                 -- Ping dimasukkan di awal deskripsi embed
-                description = "Selamat ".. tagString .." Kamu Berhasil Mendapatkan : **" .. data.Item .. "**",
+                description = "Selamat " .. tagString .. " Kamu Berhasil Mendapatkan : **" .. data.Item .. "**",
                 color = embedColor,
                 fields = {{
                     name = "❯ 👤 Player :",
@@ -345,8 +345,7 @@ local function sendEnchant(data)
         embeds = {{
             title = "✨ ENCHANT ROLLED ✨",
             -- Ping dimasukkan di awal deskripsi embed
-            description = "**" .. data.Player .. "** Telah Mendapatkan Enchant Baru **" .. data.Enchant ..
-                "**",
+            description = "**" .. data.Player .. "** Telah Mendapatkan Enchant Baru **" .. data.Enchant .. "**",
             color = 0xD000FF,
             fields = {{
                 name = "❯ 👤 Player :",
@@ -382,18 +381,22 @@ local function sendJoinLeave(player, joined)
         username = WEBHOOK_NAME,
         embeds = {{
             title = title,
-            description = "`" .. player.Name .. "` (" .. player.DisplayName .. ")",
+            description = "```" .. player.Name .. "``` (" .. player.DisplayName .. ")",
             color = color,
             fields = {{
                 name = "❯ 🆔 User ID",
-                value = "`" .. player.UserId .. "`",
-                inline = true
+                value = "```" .. player.UserId .. "```",
+                inline = false
+            },{
+                name = "❯ 👤 Player :",
+                value = "```" .. player.Name .. "```",
+                inline = false
             }, {
                 name = "❯ 📅 Account Age",
-                value = player.AccountAge .. " days",
-                inline = true
+                value ="```" .. player.AccountAge .. "``` Hari",
+                inline = false
             }},
-            imgage = {
+            image = {
                 url = IMAGE_EMBED
             },
             footer = {
