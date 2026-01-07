@@ -1,254 +1,343 @@
 -- ====================================================================
--- GDEV LOGGER v10.6 - STABLE VERSION
+-- GDEV LOGGER v9.7 - Multi-Webhook (Default Set)
 -- ====================================================================
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 local TextChatService = game:GetService("TextChatService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 
-local req = http_request or request or (syn and syn.request) or (fluxus and fluxus.request) or
-                (identifyexecutor and request)
+local req = http_request or request or (syn and syn.request) or (fluxus and fluxus.request) or (identifyexecutor and request)
 
 -- [1] LOAD WINDUI LIBRARY
 local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
 
--- [2] CONFIG DATA
-local IMAGE_EMBED = "https://cdn.discordapp.com/attachments/1449462744028811499/1458501140277628970/g_logo.jpeg"
+-- [2] CONFIG DATA & DEFAULT WEBHOOKS
+local IMAGE_EMBED = "https://cdn.discordapp.com/attachments/1449462744028811499/1449987836756627547/f7f9b6065f0db9b67dff28c80a17acd4_720w_1.gif"
 
 local SETTINGS = {
+    -- Webhook Defaults
     WebhookCatch = "https://discord.com/api/webhooks/1457726463636672512/_LFDG-8cN1tgPAJ8nX2BzkZOCr9CzFOOU1aPhpTl8jgkszzUA3g8x_1b2r5FD-hGPCQf",
     WebhookEnchant = "https://discord.com/api/webhooks/1458499915209773137/vTKhmapzHx56_c8rTELfxYYdUhMvZWBh558W6CQoKqwgLmbKbOBkushuHEESjJs8FY3E",
     WebhookJoinLeave = "https://discord.com/api/webhooks/1458500004325884130/NaP2erbHhic9Rd0xn4D5alL5ra6rYFWQsPtw24KeRkRnjpG7ZFSnJy6VeV2QVHc7R9iQ",
-
-    LogFish = true,
-    LogEnchant = true,
-    LogJoinLeave = true
+    
+    -- Toggles
+    LogFish = false,
+    LogEnchant = false, 
+    LogJoinLeave = false
 }
 
-local GlobalData = {
-    FishIdToName = {},
-    FishNameToId = {},
-    FishNames = {},
-    SelectedFishIds = {},
-    SelectedRarities = {},
-    -- Remote Detection
-    Net = ReplicatedStorage:WaitForChild("Net", 10)
+local WEBHOOK_NAME = "10s Area"
+local WEBHOOK_AVATAR = "https://cdn.discordapp.com/attachments/1452251463337377902/1456009509632737417/GDEV_New.png"
+
+local RARITY_CONFIG = {
+    Epic      = { Enabled = false, Color = 0xB373F8, Icon = "🟣" },
+    Legendary = { Enabled = false, Color = 0xFFB92B, Icon = "🟡" },
+    Mythic    = { Enabled = false, Color = 0xFF1919, Icon = "🔴" },
+    Secret    = { Enabled = false, Color = 0x18FF98, Icon = "💎" },
 }
 
--- [3] INITIALIZE DATABASE
-local function InitDatabase()
-    local itemsFolder = ReplicatedStorage:FindFirstChild("Items")
-    if itemsFolder then
-        for _, item in pairs(itemsFolder:GetChildren()) do
-            local ok, data = pcall(require, item)
-            if ok and data.Data and data.Data.Type == "Fish" then
-                local id, name = data.Data.Id, data.Data.Name
-                GlobalData.FishIdToName[id] = name
-                GlobalData.FishNameToId[name] = id
-                table.insert(GlobalData.FishNames, name)
-            end
-        end
-        table.sort(GlobalData.FishNames)
-    end
-end
-InitDatabase()
+local FOCUS_FISH = {
+    ["Sacred Guardian Squid"] = { Enabled = false, Color = 0x00FBFF },
+    ["GEMSTONE Ruby"]         = { Enabled = false, Color = 0xFF0040 },
+    ["Ruby"]                  = { Enabled = false, Color = 0xFF0040 },
+    ["Evolved Enchant Stone"] = { Enabled = false, Color = 0xFF0040 }
+}
 
--- [4] WEBHOOK SEND FUNCTION
-local function sendToDiscord(url, payload)
-    if not url or url == "" or not req then
-        return
-    end
+local RGB_RARITY = {
+    ["179,115,248"] = "Epic", ["255,185,43"] = "Legendary", 
+    ["255,25,25"] = "Mythic", ["24,255,152"] = "Secret"
+}
+
+-- ====================================================================
+-- LOGIC FUNCTIONS
+-- ====================================================================
+
+local function send(url, payload)
+    if not url or url == "" or not req then return end
     task.spawn(function()
         pcall(function()
             req({
-                Url = url,
-                Method = "POST",
-                Headers = {
-                    ["Content-Type"] = "application/json"
-                },
+                Url = url, Method = "POST",
+                Headers = { ["Content-Type"] = "application/json" },
                 Body = HttpService:JSONEncode(payload)
             })
         end)
     end)
 end
 
--- [5] UI CONSTRUCTION
-local Window = WindUI:CreateWindow({
-    Title = "GDEV FOCUS LOGGER",
-    Icon = "target",
-    Author = "10s Area",
-    Transparent = true
-})
-
-local DashTab = Window:Tab({
-    Title = "Dashboard",
-    Icon = "layout-dashboard"
-})
-local FocusTab = Window:Tab({
-    Title = "Focus Targets",
-    Icon = "crosshair"
-})
-
--- DASHBOARD
-local WebSec = DashTab:Section({
-    Title = "Discord Configuration",
-    Icon = "link"
-})
-WebSec:Input({
-    Title = "Catch URL",
-    Value = SETTINGS.WebhookCatch,
-    Callback = function(t)
-        SETTINGS.WebhookCatch = t
+local function testWebhook(url, category)
+    if url == "" then
+        WindUI:Notify({ Title = "Error", Content = category .. " URL is empty!", Icon = "alert-circle" })
+        return
     end
-})
-WebSec:Button({
-    Title = "Test Webhook",
-    Callback = function()
-        sendToDiscord(SETTINGS.WebhookCatch, {
-            username = "10s Area",
-            embeds = {{
-                title = "✅ Webhook Active",
-                color = 0x2ECC71,
-                timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
-            }}
-        })
-    end
-})
-
-local ControlSec = DashTab:Section({
-    Title = "Switches",
-    Icon = "power"
-})
-ControlSec:Toggle({
-    Title = "Log Enchant",
-    Value = SETTINGS.LogEnchant,
-    Callback = function(v)
-        SETTINGS.LogEnchant = v
-    end
-})
-ControlSec:Toggle({
-    Title = "Log Join/Leave",
-    Value = SETTINGS.LogJoinLeave,
-    Callback = function(v)
-        SETTINGS.LogJoinLeave = v
-    end
-})
-
--- FOCUS TAB
-local FocusSec = FocusTab:Section({
-    Title = "Target Selection",
-    Icon = "database"
-})
-FocusSec:Toggle({
-    Title = "Enable Focus Tracker",
-    Value = SETTINGS.LogFish,
-    Callback = function(v)
-        SETTINGS.LogFish = v
-    end
-})
-
-FocusSec:Dropdown({
-    Title = "Select Target Fish",
-    Options = GlobalData.FishNames,
-    Multi = true,
-    Callback = function(selected)
-        GlobalData.SelectedFishIds = {}
-        for _, name in ipairs(selected) do
-            local id = GlobalData.FishNameToId[name]
-            if id then
-                GlobalData.SelectedFishIds[id] = true
-            end
-        end
-    end
-})
-
-FocusSec:Dropdown({
-    Title = "Select Target Rarities",
-    Options = {"Common", "Uncommon", "Rare", "Epic", "Legendary", "Mythic", "Secret"},
-    Multi = true,
-    Callback = function(selected)
-        GlobalData.SelectedRarities = {}
-        for _, r in ipairs(selected) do
-            GlobalData.SelectedRarities[r] = true
-        end
-    end
-})
-
--- [6] CORE LOGIC
-local function triggerFocusLog(fishName, rarity, variant)
-    sendToDiscord(SETTINGS.WebhookCatch, {
-        username = "10s Area | Focus Tracker",
-        avatar_url = IMAGE_EMBED,
+    send(url, {
+        username = WEBHOOK_NAME, avatar_url = WEBHOOK_AVATAR,
         embeds = {{
-            title = "🎯 TARGET CAUGHT!",
-            color = 0xFF0040,
-            fields = {{
-                name = "👤 Player",
-                value = "`" .. Players.LocalPlayer.Name .. "`",
-                inline = true
-            }, {
-                name = "🐟 Fish",
-                value = "**" .. fishName .. "**",
-                inline = true
-            }, {
-                name = "💎 Rarity",
-                value = "`" .. (rarity or "Unknown") .. "`",
-                inline = true
-            }, {
-                name = "✨ Variant",
-                value = "`" .. (variant or "Normal") .. "`",
-                inline = true
-            }},
-            image = {
-                url = IMAGE_EMBED
-            },
-            footer = {
-                text = "GDEV Logger • Stable"
-            },
+            title = "✅ Test Connection: " .. category,
+            description = "Webhook ini berhasil terhubung untuk log " .. category,
+            color = 0x2ECC71,
+            footer = { text = "10s Area • System" },
             timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
         }}
     })
-    WindUI:Notify({
-        Title = "Target Found!",
-        Content = "Caught " .. fishName,
-        Icon = "target"
+    WindUI:Notify({ Title = "Sent", Content = "Test sent to " .. category, Icon = "send" })
+end
+
+-- Helper detection functions (keeping original logic)
+local function stripRichText(t) return t:gsub("<.->", "") end
+local function extractDisplayName(text)
+    local clean = stripRichText(text)
+    return clean:match("^%[Server%]:%s*(.-)%s*obtained") or clean:match("^(.-)%s*obtained") or "Unknown"
+end
+local function detectChance(t) return t:match("1 in ([%dKMB]+)") or "?" end
+local function detectRarity(text)
+    local r, g, b = text:match("rgb%((%d+),%s*(%d+),%s*(%d+)%)")
+    return r and (RGB_RARITY[r .. "," .. g .. "," .. b] or "Other") or "Other"
+end
+local function detectFishNameAndWeight(text)
+    local clean = stripRichText(text)
+    local openParen = clean:match("^.*()%(")
+    local fish, weight
+    if openParen then
+        local fishPart = clean:sub(1, openParen - 1)
+        local weightPart = clean:sub(openParen + 1)
+        fish = fishPart:match("obtained%s+a[n]?%s+(.+)") or fishPart:match("obtained%s+(.+)")
+        weight = weightPart:match("^(.-)%)")
+    else
+        fish = clean:match("obtained%s+a[n]?%s+(.+)") or clean:match("obtained%s+(.+)")
+        weight = "-"
+    end
+    return (fish and fish:gsub("%s+$", "") or "Unknown Fish"), (weight or "-")
+end
+local function detectEnchantData(text)
+    local clean = stripRichText(text)
+    return clean:match("^%[Server%]:%s*(.-)%s+rolled%s+a%s+(.-)%s+on%s+their%s+(.-)!$")
+end
+
+-- ====================================================================
+-- LOGGING SENDER FUNCTIONS
+-- ====================================================================
+
+local function sendFish(data)
+    local focusData = FOCUS_FISH[data.Fish]
+    local cfg = RARITY_CONFIG[data.Rarity]
+    local payload = nil
+
+    if focusData and focusData.Enabled then
+        payload = {
+            username = WEBHOOK_NAME, avatar_url = WEBHOOK_AVATAR,
+            embeds = {{
+                title = "🚨 Target Di Temukan! 🚨",
+                description = "**👑 CAUGHT: " .. data.Fish .. " 👑**",
+                color = focusData.Color,
+                fields = {
+                    { name = "👤 Player", value = "`" .. data.Player .. "`", inline = true },
+                    { name = "⚖️ Weight", value = "`" .. data.Weight .. "`", inline = true },
+                    { name = "🎲 Chance", value = "`1 in " .. data.Chance .. "`", inline = true }
+                },
+                image = { url = IMAGE_EMBED },
+                footer = { text = "10s Area • Focus Tracker" },
+                timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
+            }}
+        }
+    elseif cfg and cfg.Enabled then
+        payload = {
+            username = WEBHOOK_NAME, avatar_url = WEBHOOK_AVATAR,
+            embeds = {{
+                title = cfg.Icon .. " " .. data.Rarity .. " Tertangkap!",
+                description = "Selamat Kamu Berhasil Mendapatkan " .. data.Fish .. "!",
+                color = cfg.Color,
+                fields = {
+                    { name = "👤 Player", value = "`" .. data.Player .. "`", inline = true },
+                    { name = "🐟 Fish", value = "`" .. data.Fish .. "`", inline = true },
+                    { name = "⚖️ Weight", value = "`" .. data.Weight .. "`", inline = true },
+                    { name = "🎲 Chance", value = "`1 in " .. data.Chance .. "`", inline = true }
+                },
+                image = { url = IMAGE_EMBED },
+                footer = { text = "10s Area • Fish Logger" },
+                timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
+            }}
+        }
+    end
+
+    if payload then send(SETTINGS.WebhookCatch, payload) end
+end
+
+local function sendEnchant(data)
+    send(SETTINGS.WebhookEnchant, {
+        username = WEBHOOK_NAME,
+        embeds = {{
+            title = "✨ ENCHANTMENT ROLLED! ✨",
+            description = "**" .. data.Player .. "** Kamu Berhasil Mendapatkan Enchant Baru !",
+            color = 0xD000FF,
+            fields = {
+                { name = "🧙 Player", value = "`" .. data.Player .. "`", inline = true },
+                { name = "🔮 Enchant", value = "`" .. data.Enchant .. "`", inline = true },
+                { name = "🎣 Rod", value = "`" .. data.Rod .. "`", inline = true }
+            },
+            thumbnail = { url = IMAGE_EMBED },
+            footer = { text = "10s Area • Enchant Logger" },
+            timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
+        }}
     })
 end
 
--- REMOTE LISTENER
-if GlobalData.Net then
-    local ObtainedRE = GlobalData.Net:WaitForChild("RE/ObtainedNewFishNotification", 5)
-    if ObtainedRE then
-        ObtainedRE.OnClientEvent:Connect(function(itemId, _, data)
-            if not SETTINGS.LogFish then
-                return
-            end
+local function sendJoinLeave(player, joined)
+    if not SETTINGS.LogJoinLeave then return end
+    send(SETTINGS.WebhookJoinLeave, {
+        username = WEBHOOK_NAME, avatar_url = WEBHOOK_AVATAR,
+        embeds = {{
+            title = joined and "👋 Telah Bergabung!" or "🚪 Telah Keluar!",
+            color = joined and 0x2ECC71 or 0xE74C3C,
+            fields = {
+                { name = "👤 Player", value = "`" .. player.Name .. "`" },
+                { name = "👤 Display Name", value = "`" .. player.DisplayName .. "`" }
+            },
+            thumbnail = { url = IMAGE_EMBED },
+            footer = { text = "10s Area • Server Activity" },
+            timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
+        }}
+    })
+end
 
-            local fishName = GlobalData.FishIdToName[itemId] or "Unknown"
-            -- Sederhanakan penentuan rarity dari data game
-            local isFocused = GlobalData.SelectedFishIds[itemId]
+-- ====================================================================
+-- WINDUI CONSTRUCTION
+-- ====================================================================
 
-            if isFocused then
-                triggerFocusLog(fishName, "From Database", "Detected")
-            end
-        end)
+local Window = WindUI:CreateWindow({
+    Title = "GDEV LOGGER MULTI",
+    Icon = "fish",
+    Author = "10s Area",
+    Folder = "GDEVLogger_Multi",
+    Transparent = true
+})
+
+Window:EditOpenButton({
+    Title = "Open Logger",
+    Icon = "fish-symbol",
+    Color = ColorSequence.new(Color3.fromHex("FF0F7B"), Color3.fromHex("F89B29")),
+})
+
+local DashboardTab = Window:Tab({ Title = "Dashboard", Icon = "layout-dashboard" })
+local SettingsTab = Window:Tab({ Title = "Settings", Icon = "settings" })
+
+-- >> DASHBOARD: WEBHOOKS & TEST BUTTONS
+local WebhookSection = DashboardTab:Section({ Title = "Webhook URLs (Auto-Set)", Icon = "link" })
+
+-- Tangkapan
+WebhookSection:Input({
+    Title = "Webhook Tangkapan",
+    Value = SETTINGS.WebhookCatch,
+    Callback = function(text) SETTINGS.WebhookCatch = text end
+})
+WebhookSection:Button({
+    Title = "Test Webhook Tangkapan",
+    Callback = function() testWebhook(SETTINGS.WebhookCatch, "Tangkapan") end
+})
+
+-- Enchant
+WebhookSection:Input({
+    Title = "Webhook Enchant",
+    Value = SETTINGS.WebhookEnchant,
+    Callback = function(text) SETTINGS.WebhookEnchant = text end
+})
+WebhookSection:Button({
+    Title = "Test Webhook Enchant",
+    Callback = function() testWebhook(SETTINGS.WebhookEnchant, "Enchant") end
+})
+
+-- Masuk/Keluar
+WebhookSection:Input({
+    Title = "Webhook Masuk/Keluar",
+    Value = SETTINGS.WebhookJoinLeave,
+    Callback = function(text) SETTINGS.WebhookJoinLeave = text end
+})
+WebhookSection:Button({
+    Title = "Test Webhook Masuk/Keluar",
+    Callback = function() testWebhook(SETTINGS.WebhookJoinLeave, "Masuk/Keluar") end
+})
+
+local ControlSection = DashboardTab:Section({ Title = "Logger Controls", Icon = "power" })
+
+ControlSection:Toggle({
+    Title = "Enable Fish Logger",
+    Value = SETTINGS.LogFish,
+    Callback = function(val) SETTINGS.LogFish = val end
+})
+
+ControlSection:Toggle({
+    Title = "Enable Enchant Logger",
+    Value = SETTINGS.LogEnchant,
+    Callback = function(val) SETTINGS.LogEnchant = val end
+})
+
+ControlSection:Toggle({
+    Title = "Log Join/Leave",
+    Value = SETTINGS.LogJoinLeave,
+    Callback = function(val) SETTINGS.LogJoinLeave = val end
+})
+
+-- >> SETTINGS: FOCUS & RARITY
+local FocusSection = SettingsTab:Section({ Title = "Focus Targets", Icon = "crosshair" })
+for fishName, config in pairs(FOCUS_FISH) do
+    FocusSection:Toggle({
+        Title = "Focus: " .. fishName,
+        Value = config.Enabled,
+        Callback = function(val) config.Enabled = val end
+    })
+end
+
+local RaritySection = SettingsTab:Section({ Title = "Rarity Filters", Icon = "filter" })
+local RarityOrder = {"Epic", "Legendary", "Mythic", "Secret"}
+for _, rarityName in ipairs(RarityOrder) do
+    local config = RARITY_CONFIG[rarityName]
+    if config then
+        RaritySection:Toggle({
+            Title = "Log " .. rarityName,
+            Value = config.Enabled,
+            Callback = function(val) config.Enabled = val end
+        })
     end
 end
 
--- JOIN/LEAVE
-Players.PlayerAdded:Connect(function(p)
-    if SETTINGS.LogJoinLeave then
-        sendToDiscord(SETTINGS.WebhookJoinLeave, {
-            embeds = {{
-                title = "👋 " .. p.Name .. " Joined",
-                color = 0x2ECC71
-            }}
+-- ====================================================================
+-- LISTENERS
+-- ====================================================================
+
+local LastMsg = ""
+local LastTime = 0
+
+local function ProcessText(text)
+    if not text then return end
+    if text == LastMsg and (os.clock() - LastTime) < 1 then return end
+    LastMsg = text
+    LastTime = os.clock()
+
+    if SETTINGS.LogFish and text:find("obtained") then
+        local fishName, weight = detectFishNameAndWeight(text)
+        local rarity = detectRarity(text)
+        if rarity == "Other" and not FOCUS_FISH[fishName] then return end
+        sendFish({
+            Player = extractDisplayName(text),
+            Fish = fishName, Weight = weight,
+            Chance = detectChance(text), Rarity = rarity
         })
     end
-end)
 
-WindUI:Notify({
-    Title = "System",
-    Content = "Script Ready!",
-    Icon = "check"
-})
+    if SETTINGS.LogEnchant and text:find("rolled a") and text:find("on their") then
+        local p, e, r = detectEnchantData(text)
+        if p and e and r then
+            sendEnchant({ Player = p, Enchant = e, Rod = r })
+        end
+    end
+end
+
+TextChatService.MessageReceived:Connect(function(m) ProcessText(m.Text) end)
+TextChatService.OnIncomingMessage = function(m)
+    if m.Status == Enum.TextChatMessageStatus.Success then ProcessText(m.Text) end
+end
+
+Players.PlayerAdded:Connect(function(p) sendJoinLeave(p, true) end)
+Players.PlayerRemoving:Connect(function(p) sendJoinLeave(p, false) end)
+
+WindUI:Notify({ Title = "System", Content = "Webhooks Initialized!", Duration = 3, Icon = "check" })
