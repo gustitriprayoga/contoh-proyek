@@ -339,33 +339,31 @@ local function sendCatchLog(data)
     local embedColor = rarityCfg.Color
     local titleText = rarityCfg.Icon .. " " .. data.Rarity .. " | Berhasil Di Dapatkan "
 
-    -- 1. Priority Check (Strict Focus)
     if IsItemFocused(data.Item) then
         shouldSend = true
         embedColor = 0xFF0040
-        titleText = "🚨 TARGET SPESIFIK DITEMUKAN! 🚨"
-
-        -- 2. Fallback ke Rarity biasa (Jika Focus Filter tidak menyala atau tidak cocok, tapi rarity dinyalakan)
-        -- Note: Jika FocusFilterEnabled = true, maka IsItemFocused sudah menangani logika.
-        -- Jika user ingin "Hanya Focus", matikan toggle rarity di UI.
+        titleText = "🚨 TARGET DITEMUKAN KAWAN! 🚨"
     elseif rarityCfg.Enabled then
         shouldSend = true
-
     elseif SETTINGS.LogEverything then
         shouldSend = true
         titleText = "❓ LOG (Generic)"
     end
 
     if shouldSend then
+        -- Ambil Tag Raw
         local userTag = GetMentionContent(data.Player)
-        local tagString = (userTag ~= "") and (userTag .. "\n") or ""
+        -- Format untuk Deskripsi (Pakai Newline)
+        local descTag = (userTag ~= "") and (userTag .. "\n") or ""
+        -- Format untuk Field (Tanpa Newline, Default N/A)
+        local fieldTag = (userTag ~= "") and userTag or "N/A"
 
         send(SETTINGS.WebhookCatch, {
             username = WEBHOOK_NAME,
             avatar_url = WEBHOOK_AVATAR,
             embeds = {{
                 title = titleText,
-                description = tagString .. "Selamat Kamu Berhasil Mendapatkan : **" .. data.Item .. "**",
+                description = descTag .. "Selamat Kamu Berhasil Mendapatkan : **" .. data.Item .. "**",
                 color = embedColor,
                 fields = {{
                     name = "❯ 👤 Player :",
@@ -379,6 +377,9 @@ local function sendCatchLog(data)
                 }, {
                     name = "❯ 🎲 Chance :",
                     value = "```1 in " .. data.Chance .. "```"
+                }, {
+                    name = "❯ 🆔 Discord :", -- Field Baru
+                    value = "```" .. fieldTag .. "```"
                 }},
                 image = {
                     url = IMAGE_EMBED
@@ -394,25 +395,34 @@ local function sendCatchLog(data)
 end
 
 local function sendEnchant(data)
+    -- Ambil Tag
     local userTag = GetMentionContent(data.Player)
-    local tagString = (userTag ~= "") and (userTag .. "\n") or ""
+    -- Format Ping untuk Deskripsi (Ada Newline)
+    local descTag = (userTag ~= "") and (userTag .. "\n") or ""
+    -- Format Text untuk Field (Tanpa Newline, Default N/A)
+    local fieldTag = (userTag ~= "") and userTag or "N/A"
 
     send(SETTINGS.WebhookEnchant, {
         username = WEBHOOK_NAME,
+        avatar_url = WEBHOOK_AVATAR,
         embeds = {{
             title = "✨ ENCHANT ROLLED ✨",
-            description = tagString .. "**" .. data.Player .. "** Telah Mendapatkan Enchant Baru **" .. data.Enchant ..
+            -- Ping aktif di sini
+            description = descTag .. "**" .. data.Player .. "** Telah Mendapatkan Enchant Baru **" .. data.Enchant ..
                 "**",
             color = 0xD000FF,
             fields = {{
-                name = "❯👤 Player :",
+                name = "❯ 👤 Player :",
                 value = "```" .. data.Player .. "```"
             }, {
-                name = "❯🔮 Enchant :",
+                name = "❯ 🔮 Enchant :",
                 value = "```" .. data.Enchant .. "```"
             }, {
-                name = "❯🎣 Rod :",
+                name = "❯ 🎣 Rod :",
                 value = "```" .. data.Rod .. "```"
+            }, {
+                name = "❯ 🆔 Discord :", -- Field Tambahan
+                value = "```" .. fieldTag .. "```"
             }},
             image = {
                 url = IMAGE_EMBED
@@ -434,24 +444,34 @@ local function sendJoinLeave(player, joined)
     local title = joined and "👋 PLAYER TELAH BERGABUNG" or "🚪 PLAYER TELAH KELUAR"
     local color = joined and 0x00FF00 or 0xFF0000
 
+    -- Ambil Tag
+    local userTag = GetMentionContent(player.Name)
+    local descTag = (userTag ~= "") and (userTag .. "\n") or ""
+    local fieldTag = (userTag ~= "") and userTag or "N/A"
+
     send(SETTINGS.WebhookJoinLeave, {
         username = WEBHOOK_NAME,
+        avatar_url = WEBHOOK_AVATAR,
         embeds = {{
             title = title,
-            description = "`" .. player.Name .. "` (" .. player.DisplayName .. ")",
+            description = descTag .. "`" .. player.Name .. "` (" .. player.DisplayName .. ")",
             color = color,
             fields = {{
-                name = "🆔 User ID",
-                value = "`" .. player.UserId .. "`",
+                name = "❯ 🆔 User ID :",
+                value = "```" .. player.UserId .. "```",
                 inline = true
             }, {
-                name = "📅 Account Age",
-                value = player.AccountAge .. " days",
+                name = "❯ 📅 Account Age :",
+                value = "```" .. player.AccountAge .. " days```",
                 inline = true
+            }, {
+                name = "❯ 🆔 Discord :", -- Field Tambahan
+                value = "```" .. fieldTag .. "```",
+                inline = false
             }},
-            imgage = {
+            image = {
                 url = IMAGE_EMBED
-            },
+            }, -- Typo 'imgage' diperbaiki jadi 'image'
             footer = {
                 text = "Server Join/Leave Logger"
             },
