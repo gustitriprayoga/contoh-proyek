@@ -1,5 +1,5 @@
 -- ====================================================================
--- GDEV LOGGER v22.0 (MODIFIED) - SPECIFIC USER TAGS IN EMBED
+-- GDEV LOGGER v28.0 - STRICT COMBINATION (GEMSTONE + RUBY ONLY)
 -- ====================================================================
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
@@ -17,16 +17,13 @@ local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/rel
 local IMAGE_EMBED =
     "https://cdn.discordapp.com/attachments/1449462744028811499/1449987836756627547/f7f9b6065f0db9b67dff28c80a17acd4_720w_1.gif"
 
--- [[ BAGIAN INI DITAMBAHKAN: USER MAPPING ]] --
+-- [[ USER MAPPING ]] --
 local USER_MAPPING = {
-    -- GROUP 1 (Alice & Friends)
     ["Alice4JAV"] = "425852550672023552",
     ["Lia4JAV"] = "425852550672023552",
     ["Ti4JAV"] = "425852550672023552",
     ["Lya4JAV"] = "425852550672023552",
     ["Clay4JAV"] = "425852550672023552",
-
-    -- GROUP 2 (Apuk)
     ["AbgRIchOmon"] = "592612835960422411",
     ["PriaTerzolimi22"] = "592612835960422411",
     ["NanikAAA4JAV"] = "592612835960422411",
@@ -40,7 +37,9 @@ local SETTINGS = {
 
     LogFish = true,
     LogEnchant = true,
-    LogJoinLeave = true, -- Default ON
+    LogJoinLeave = true,
+
+    FocusFilterEnabled = true, -- WAJIB TRUE AGAR FITUR STRICT JALAN
     LogEverything = false
 }
 
@@ -50,7 +49,10 @@ local WEBHOOK_AVATAR = "https://cdn.discordapp.com/attachments/14522514633373779
 local GlobalData = {
     ListFish = {},
     ListStones = {},
+    ListMutations = {},
+
     FocusFish = {},
+    FocusMutations = {},
     FocusStones = {}
 }
 
@@ -109,37 +111,48 @@ local COLOR_MAP = {
 }
 
 -- ====================================================================
--- [3] STRICT DATABASE SCANNER
+-- [3] COMPREHENSIVE DATABASE SCANNER
 -- ====================================================================
-local function ScanDatabaseStrict()
+local function ScanAllDatabases()
     local ItemsFolder = ReplicatedStorage:FindFirstChild("Items")
-    if not ItemsFolder then
-        return {}, {}
-    end
+    local fishList, stoneList = {}, {}
 
-    local fishList = {}
-    local stoneList = {}
-
-    for i, item in ipairs(ItemsFolder:GetChildren()) do
-        local ok, module = pcall(require, item)
-        if ok and module.Data and module.Data.Name then
-            local d = module.Data
-            local n = d.Name
-
-            if d.Type == "Fish" then
-                table.insert(fishList, n)
-            elseif n:match("Stone") or n:match("Enchant") or n:match("Relic") or d.Type == "Stone" then
-                table.insert(stoneList, n)
+    if ItemsFolder then
+        for i, item in ipairs(ItemsFolder:GetChildren()) do
+            local ok, module = pcall(require, item)
+            if ok and module.Data and module.Data.Name then
+                local d = module.Data
+                local n = d.Name
+                if d.Type == "Fish" then
+                    table.insert(fishList, n)
+                elseif n:match("Stone") or n:match("Enchant") or n:match("Relic") or d.Type == "Stone" then
+                    table.insert(stoneList, n)
+                end
+            end
+            if i % 100 == 0 then
+                task.wait()
             end
         end
-        if i % 50 == 0 then
-            task.wait()
+    end
+
+    local mutationList = {}
+    local VariantsFolder = ReplicatedStorage:FindFirstChild("Variants")
+    if VariantsFolder then
+        for i, variantModule in pairs(VariantsFolder:GetChildren()) do
+            local ok, variantData = pcall(require, variantModule)
+            if ok and variantData.Data and variantData.Data.Name then
+                table.insert(mutationList, variantData.Data.Name)
+            end
+            if i % 50 == 0 then
+                task.wait()
+            end
         end
     end
 
     table.sort(fishList)
     table.sort(stoneList)
-    return fishList, stoneList
+    table.sort(mutationList)
+    return fishList, stoneList, mutationList
 end
 
 -- ====================================================================
@@ -164,7 +177,6 @@ local function send(url, payload)
     end)
 end
 
--- [[ FUNGSI GET TAG ]] --
 local function GetMentionContent(playerName)
     if USER_MAPPING[playerName] then
         return "<@" .. USER_MAPPING[playerName] .. ">"
@@ -262,20 +274,62 @@ local function detectEnchantData(text)
 end
 
 -- ====================================================================
--- [5] SENDING LOGIC (Modified for Tag Inside Embed)
+-- [5] SENDING LOGIC (STRICT COMBINATION MODE)
 -- ====================================================================
 
+-- Fungsi Pengecekan Utama
 local function IsItemFocused(itemName)
-    for target, _ in pairs(GlobalData.FocusFish) do
-        if string.find(itemName, target) then
-            return true
-        end
+    if not SETTINGS.FocusFilterEnabled then
+        return false
     end
+
+    -- 1. CEK BATU (Independent)
+    -- Batu selalu dicek pertama dan tidak peduli dengan filter Ikan/Mutasi
     for target, _ in pairs(GlobalData.FocusStones) do
         if string.find(itemName, target) then
-            return true
+            return true -- Jika cocok dengan list batu, LANGSUNG TERIMA
         end
     end
+
+    -- 2. LOGIKA KOMBINASI IKAN & MUTASI
+    local fishSelected = false
+    local fishMatched = false
+
+    local mutationSelected = false
+    local mutationMatched = false
+
+    -- Cek apakah user memilih Ikan
+    for target, _ in pairs(GlobalData.FocusFish) do
+        fishSelected = true
+        if string.find(itemName, target) then
+            fishMatched = true
+            break
+        end
+    end
+
+    -- Cek apakah user memilih Mutasi
+    for target, _ in pairs(GlobalData.FocusMutations) do
+        mutationSelected = true
+        if string.find(itemName, target) then
+            mutationMatched = true
+            break
+        end
+    end
+
+    -- >> LOGIKA KEPUTUSAN (STRICT AND) << --
+    if fishSelected and mutationSelected then
+        -- Jika user memilih Ikan DAN Mutasi, keduanya HARUS cocok
+        return fishMatched and mutationMatched
+
+    elseif fishSelected then
+        -- Jika user HANYA memilih Ikan, cukup cocokkan Ikan
+        return fishMatched
+
+    elseif mutationSelected then
+        -- Jika user HANYA memilih Mutasi, cukup cocokkan Mutasi
+        return mutationMatched
+    end
+
     return false
 end
 
@@ -283,21 +337,26 @@ local function sendCatchLog(data)
     local rarityCfg = RARITY_CONFIG[data.Rarity] or RARITY_CONFIG["Unknown"]
     local shouldSend = false
     local embedColor = rarityCfg.Color
-    local titleText = rarityCfg.Icon .. " " .. data.Rarity .. " | Berhasil Di Temukan! "
+    local titleText = rarityCfg.Icon .. " " .. data.Rarity .. " | Berhasil Di Dapatkan "
 
+    -- 1. Priority Check (Strict Focus)
     if IsItemFocused(data.Item) then
         shouldSend = true
         embedColor = 0xFF0040
-        titleText = "🚨 TARGET DITEMUKAN KAWAN! 🚨"
+        titleText = "🚨 TARGET SPESIFIK DITEMUKAN! 🚨"
+
+        -- 2. Fallback ke Rarity biasa (Jika Focus Filter tidak menyala atau tidak cocok, tapi rarity dinyalakan)
+        -- Note: Jika FocusFilterEnabled = true, maka IsItemFocused sudah menangani logika.
+        -- Jika user ingin "Hanya Focus", matikan toggle rarity di UI.
     elseif rarityCfg.Enabled then
         shouldSend = true
+
     elseif SETTINGS.LogEverything then
         shouldSend = true
         titleText = "❓ LOG (Generic)"
     end
 
     if shouldSend then
-        -- Ambil Tag
         local userTag = GetMentionContent(data.Player)
         local tagString = (userTag ~= "") and (userTag .. "\n") or ""
 
@@ -306,8 +365,7 @@ local function sendCatchLog(data)
             avatar_url = WEBHOOK_AVATAR,
             embeds = {{
                 title = titleText,
-                -- Ping dimasukkan di awal deskripsi embed
-                description = "Selamat " .. tagString .. " Kamu Berhasil Mendapatkan : **" .. data.Item .. "**",
+                description = tagString .. "Selamat Kamu Berhasil Mendapatkan : **" .. data.Item .. "**",
                 color = embedColor,
                 fields = {{
                     name = "❯ 👤 Player :",
@@ -326,7 +384,7 @@ local function sendCatchLog(data)
                     url = IMAGE_EMBED
                 },
                 footer = {
-                    text = "10s Area • Enchant Logger",
+                    text = "10s Area • Fish Logger",
                     inline = true
                 },
                 timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
@@ -336,7 +394,6 @@ local function sendCatchLog(data)
 end
 
 local function sendEnchant(data)
-    -- Ambil Tag
     local userTag = GetMentionContent(data.Player)
     local tagString = (userTag ~= "") and (userTag .. "\n") or ""
 
@@ -344,17 +401,17 @@ local function sendEnchant(data)
         username = WEBHOOK_NAME,
         embeds = {{
             title = "✨ ENCHANT ROLLED ✨",
-            -- Ping dimasukkan di awal deskripsi embed
-            description = "**" .. data.Player .. "** Telah Mendapatkan Enchant Baru **" .. data.Enchant .. "**",
+            description = tagString .. "**" .. data.Player .. "** Telah Mendapatkan Enchant Baru **" .. data.Enchant ..
+                "**",
             color = 0xD000FF,
             fields = {{
-                name = "❯ 👤 Player :",
+                name = "❯👤 Player :",
                 value = "```" .. data.Player .. "```"
             }, {
-                name = "❯ 🔮 Enchant :",
+                name = "❯🔮 Enchant :",
                 value = "```" .. data.Enchant .. "```"
             }, {
-                name = "❯ 🎣 Rod :",
+                name = "❯🎣 Rod :",
                 value = "```" .. data.Rod .. "```"
             }},
             image = {
@@ -381,22 +438,18 @@ local function sendJoinLeave(player, joined)
         username = WEBHOOK_NAME,
         embeds = {{
             title = title,
-            description = "```" .. player.Name .. "``` (" .. player.DisplayName .. ")",
+            description = "`" .. player.Name .. "` (" .. player.DisplayName .. ")",
             color = color,
             fields = {{
-                name = "❯ 🆔 User ID",
-                value = "```" .. player.UserId .. "```",
-                inline = false
-            },{
-                name = "❯ 👤 Player :",
-                value = "```" .. player.Name .. "```",
-                inline = false
+                name = "🆔 User ID",
+                value = "`" .. player.UserId .. "`",
+                inline = true
             }, {
-                name = "❯ 📅 Account Age",
-                value ="```" .. player.AccountAge .. "``` Hari",
-                inline = false
+                name = "📅 Account Age",
+                value = player.AccountAge .. " days",
+                inline = true
             }},
-            image = {
+            imgage = {
                 url = IMAGE_EMBED
             },
             footer = {
@@ -411,7 +464,7 @@ end
 -- [6] UI CONSTRUCTION (WINDUI)
 -- ====================================================================
 local Window = WindUI:CreateWindow({
-    Title = "GDEV LOGGER v22.0",
+    Title = "GDEV LOGGER v28.0",
     Icon = "target",
     Author = "10s Area",
     Transparent = true
@@ -429,7 +482,7 @@ Window:EditOpenButton({
 })
 
 Window:Tag({
-    Title = "v22.0",
+    Title = "v28.0 Strict",
     Icon = "github",
     Color = Color3.fromHex("#30ff6a"),
     Radius = 0
@@ -453,9 +506,35 @@ local FocusSec = TrackerTab:Section({
     Icon = "database"
 })
 
+-- [[ TOMBOL ON/OFF TARGET FILTER ]] --
+FocusSec:Toggle({
+    Title = "Enable Target Filter",
+    Desc = "ON = Harus sesuai pilihan dropdown. OFF = Abaikan dropdown.",
+    Value = SETTINGS.FocusFilterEnabled,
+    Callback = function(v)
+        SETTINGS.FocusFilterEnabled = v
+    end
+})
+
+FocusSec:Button({
+    Title = "Reset All Selections",
+    Icon = "trash",
+    Callback = function()
+        GlobalData.FocusFish = {}
+        GlobalData.FocusMutations = {}
+        GlobalData.FocusStones = {}
+        WindUI:Notify({
+            Title = "Reset",
+            Content = "Selection cleared!",
+            Icon = "check"
+        })
+    end
+})
+
+-- DROPDOWN 1: FISH
 local FishDropdown = FocusSec:Dropdown({
-    Title = "Search Fish",
-    Desc = "Hanya menampilkan Ikan.",
+    Title = "Search Fish (Kombinasi)",
+    Desc = "Pilih Ikan (Contoh: Ruby).",
     Values = {"Scanning..."},
     Multi = true,
     Callback = function(list)
@@ -471,9 +550,29 @@ local FishDropdown = FocusSec:Dropdown({
     end
 })
 
+-- DROPDOWN 2: MUTATIONS
+local MutationDropdown = FocusSec:Dropdown({
+    Title = "Search Mutations (Kombinasi)",
+    Desc = "Pilih Mutasi (Contoh: Gemstone).",
+    Values = {"Scanning..."},
+    Multi = true,
+    Callback = function(list)
+        GlobalData.FocusMutations = {}
+        if type(list) == "string" then
+            list = {list}
+        end
+        for _, name in pairs(list) do
+            if name ~= "Scanning..." then
+                GlobalData.FocusMutations[name] = true
+            end
+        end
+    end
+})
+
+-- DROPDOWN 3: STONES
 local StoneDropdown = FocusSec:Dropdown({
-    Title = "Search Stones / Enchants",
-    Desc = "Hanya Batu & Enchant.",
+    Title = "Search Stones (Independen)",
+    Desc = "Pilih Batu/Item (Langsung kirim jika cocok).",
     Values = {"Scanning..."},
     Multi = true,
     Callback = function(list)
@@ -579,11 +678,7 @@ local InfoSec = InfoTab:Section({
 })
 InfoSec:Paragraph({
     Title = "GDEV Logger",
-    Desc = "Versi: 22.0 (Final)\nDeveloper: 10s Area\nFramework: WindUI"
-})
-InfoSec:Paragraph({
-    Title = "Features",
-    Desc = "- Auto Focus Detection\n- Strict Database Filter\n- Chat Parsing Engine\n- Minimizable UI"
+    Desc = "Versi: 28.0 (Strict Combo)\nDeveloper: 10s Area"
 })
 
 InfoSec:Button({
@@ -593,16 +688,18 @@ InfoSec:Button({
         setclipboard("https://discord.gg/yourlink")
         WindUI:Notify({
             Title = "Copied",
-            Content = "Discord Link copied to clipboard!",
+            Content = "Discord Link copied!",
             Icon = "copy"
         })
     end
 })
 
+-- >> SCANNER BACKGROUND <<
 task.spawn(function()
-    local fish, stones = ScanDatabaseStrict()
+    local fish, stones, mutations = ScanAllDatabases()
     GlobalData.ListFish = fish
     GlobalData.ListStones = stones
+    GlobalData.ListMutations = mutations
 
     pcall(function()
         if #fish > 0 then
@@ -610,6 +707,13 @@ task.spawn(function()
                 FishDropdown:SetValues(fish)
             elseif FishDropdown.Refresh then
                 FishDropdown:Refresh(fish)
+            end
+        end
+        if #mutations > 0 then
+            if MutationDropdown.SetValues then
+                MutationDropdown:SetValues(mutations)
+            elseif MutationDropdown.Refresh then
+                MutationDropdown:Refresh(mutations)
             end
         end
         if #stones > 0 then
@@ -626,7 +730,7 @@ task.spawn(function()
     end)
     WindUI:Notify({
         Title = "System Ready",
-        Content = "Database loaded & UI ready.",
+        Content = "Strict Combination Logic Active.",
         Icon = "check"
     })
 end)
@@ -693,6 +797,6 @@ end)
 
 WindUI:Notify({
     Title = "Success",
-    Content = "GDEV Logger v22.0 Loaded!",
+    Content = "GDEV v28.0 Loaded!",
     Icon = "zap"
 })
