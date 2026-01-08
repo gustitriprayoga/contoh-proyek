@@ -455,7 +455,7 @@ local function sendCatchLog(data)
         local discordField = (userTag ~= "") and userTag or "N/A"
 
         send(SETTINGS.WebhookCatch, {
-            content = userTag,
+            -- content = userTag,
             username = WEBHOOK_NAME,
             avatar_url = WEBHOOK_AVATAR,
             embeds = {{
@@ -474,9 +474,6 @@ local function sendCatchLog(data)
                 }, {
                     name = "❯ 🎲 Chance :",
                     value = "```1 in " .. data.Chance .. "```"
-                }, {
-                    name = "❯ 🆔 Discord :",
-                    value = "```" .. discordField .. "```"
                 }},
                 image = {
                     url = dynamicImage
@@ -497,7 +494,7 @@ local function sendEnchant(data)
     local discordField = (userTag ~= "") and userTag or "N/A"
 
     send(SETTINGS.WebhookEnchant, {
-        content = userTag,
+        -- content = userTag,
         username = WEBHOOK_NAME,
         embeds = {{
             title = "✨ ENCHANT ROLLED ✨",
@@ -512,9 +509,6 @@ local function sendEnchant(data)
             }, {
                 name = "❯🎣 Rod :",
                 value = "```" .. data.Rod .. "```"
-            }, {
-                name = "❯ 🆔 Discord :",
-                value = "```" .. discordField .. "```"
             }},
             image = {
                 url = DEFAULT_IMAGE
@@ -552,10 +546,6 @@ local function sendJoinLeave(player, joined)
                 name = "📅 Account Age",
                 value = player.AccountAge .. " days",
                 inline = true
-            }, {
-                name = "❯ 🆔 Discord",
-                value = "```" .. discordField .. "```",
-                inline = false
             }},
             image = {
                 url = DEFAULT_IMAGE
