@@ -1,5 +1,5 @@
 -- ====================================================================
--- GDEV LOGGER v36.0 - MANUAL DEBUG SCAN & OPTIMIZED LOAD
+-- GDEV LOGGER v32.0 - SMART IMAGE MATCHER (VARIANT FIX)
 -- ====================================================================
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
@@ -50,26 +50,31 @@ local SETTINGS = {
 local WEBHOOK_NAME = "10s Area"
 local WEBHOOK_AVATAR = "https://cdn.discordapp.com/attachments/1452251463337377902/1456009509632737417/GDEV_New.png"
 
--- [[ DATABASE MANUAL: VARIANT ]]
-local MANUAL_VARIANTS = {"1x1x1x1", "Albino", "Arctic Frost", "Big", "Bloodmoon", "Color Burn", "Corrupt", "Disco",
-                         "Fairy Dust", "Festive", "Frozen", "Galaxy", "Gemstone", "Ghost", "Giant", "Gold",
-                         "Holographic", "Lightning", "Midnight", "Moon Fragment", "Noob", "Radioactive", "Sandy",
-                         "Shiny", "Stone", "STONE", "FESTIVE", "ARCTIC FROST", "Festive", "Arctic Frost"}
-table.sort(MANUAL_VARIANTS)
-
--- [[ DATABASE MANUAL: STONES ]]
-local MANUAL_STONES = {"Enchant Stone", "Evolved Enchant Stone"}
-table.sort(MANUAL_STONES)
-
 local GlobalData = {
     ListFish = {},
-    ListStones = MANUAL_STONES, -- Manual
-    ListMutations = MANUAL_VARIANTS, -- Manual
-
+    ListStones = {},
+    ListMutations = {},
     FocusFish = {},
     FocusMutations = {},
     FocusStones = {},
     DebugTarget = nil
+}
+
+local COLOR_MAP = {
+    ["179,115,248"] = "Epic",
+    ["#B373F8"] = "Epic",
+    ["255,185,43"] = "Legendary",
+    ["#FFB92B"] = "Legendary",
+    ["255,25,25"] = "Mythic",
+    ["#FF1919"] = "Mythic",
+    ["24,255,152"] = "Secret",
+    ["#18FF98"] = "Secret",
+    ["0,255,0"] = "Common",
+    ["#00FF00"] = "Common",
+    ["204,204,204"] = "Uncommon",
+    ["#CCCCCC"] = "Uncommon",
+    ["61,133,198"] = "Rare",
+    ["#3D85C6"] = "Rare"
 }
 
 local RARITY_CONFIG = {
@@ -115,25 +120,8 @@ local RARITY_CONFIG = {
     }
 }
 
-local COLOR_MAP = {
-    ["179,115,248"] = "Epic",
-    ["#B373F8"] = "Epic",
-    ["255,185,43"] = "Legendary",
-    ["#FFB92B"] = "Legendary",
-    ["255,25,25"] = "Mythic",
-    ["#FF1919"] = "Mythic",
-    ["24,255,152"] = "Secret",
-    ["#18FF98"] = "Secret",
-    ["0,255,0"] = "Common",
-    ["#00FF00"] = "Common",
-    ["204,204,204"] = "Uncommon",
-    ["#CCCCCC"] = "Uncommon",
-    ["61,133,198"] = "Rare",
-    ["#3D85C6"] = "Rare"
-}
-
 -- ====================================================================
--- [3] IMAGE SYSTEM
+-- [3] IMAGE SYSTEM (SMART MATCHER)
 -- ====================================================================
 local function getThumbnailURL(assetString)
     if not assetString then
@@ -156,71 +144,106 @@ local function getThumbnailURL(assetString)
     return nil
 end
 
-local function CleanItemName(fullName)
-    local cleaned = fullName
-    for _, mutName in pairs(GlobalData.ListMutations) do
-        cleaned = cleaned:gsub(mutName .. "%s*", "")
+-- Helper untuk mengambil ID dari Module
+local function ExtractIDFromModule(moduleInstance)
+    if not moduleInstance then
+        return nil
     end
-    return cleaned:gsub("^%s*(.-)%s*$", "%1")
+    local ok, data = pcall(require, moduleInstance)
+    if ok and data.Data then
+        return data.Data.Image or data.Data.Texture or data.Data.TextureId or data.Data.Icon
+    end
+    return nil
 end
 
+-- [[ FUNGSI PENCARI GAMBAR PINTAR ]] --
 local function GetItemImageURL(itemName)
     local ItemsFolder = ReplicatedStorage:FindFirstChild("Items")
     if not ItemsFolder then
         return DEFAULT_IMAGE
     end
 
-    local targetModule = ItemsFolder:FindFirstChild(itemName)
-
-    if not targetModule then
-        local baseName = CleanItemName(itemName)
-        targetModule = ItemsFolder:FindFirstChild(baseName)
+    -- 1. Coba Cari Nama Persis (Ex: "Angler Fish")
+    local exactModule = ItemsFolder:FindFirstChild(itemName)
+    if exactModule then
+        local rawId = ExtractIDFromModule(exactModule)
+        if rawId then
+            return getThumbnailURL(tostring(rawId)) or DEFAULT_IMAGE
+        end
     end
 
-    if targetModule then
-        local ok, data = pcall(require, targetModule)
-        if ok and data.Data then
-            local rawId = data.Data.Image or data.Data.Texture or data.Data.TextureId or data.Data.Icon
+    -- 2. Coba Bersihkan Nama dari Variant (Ex: "Shiny Angler Fish" -> "Angler Fish")
+    local cleanName = itemName
+    for _, variantName in pairs(GlobalData.ListMutations) do
+        -- Hapus kata variant (Case sensitive sesuai database)
+        cleanName = cleanName:gsub(variantName, "")
+    end
+    -- Hapus spasi berlebih di awal/akhir
+    cleanName = cleanName:gsub("^%s*(.-)%s*$", "%1")
+
+    local cleanModule = ItemsFolder:FindFirstChild(cleanName)
+    if cleanModule then
+        local rawId = ExtractIDFromModule(cleanModule)
+        if rawId then
+            return getThumbnailURL(tostring(rawId)) or DEFAULT_IMAGE
+        end
+    end
+
+    -- 3. (Fallback) Coba cari items yang namanya ada di dalam string tangkapan
+    -- Contoh: Tangkapan "Big Albino Shark", di database ada "Shark".
+    for _, itemMod in pairs(ItemsFolder:GetChildren()) do
+        -- Pastikan nama item lebih panjang dari 3 huruf agar tidak salah match
+        if #itemMod.Name > 3 and string.find(itemName, itemMod.Name) then
+            local rawId = ExtractIDFromModule(itemMod)
             if rawId then
-                local convertedUrl = getThumbnailURL(tostring(rawId))
-                if convertedUrl then
-                    return convertedUrl
-                end
+                return getThumbnailURL(tostring(rawId)) or DEFAULT_IMAGE
             end
         end
     end
+
     return DEFAULT_IMAGE
 end
 
 -- ====================================================================
--- [4] SCANNER HANYA IKAN (SAFE YIELDING)
+-- [4] DATABASE SCANNER
 -- ====================================================================
-local function ScanFishOnly()
-    local ItemsFolder = ReplicatedStorage:WaitForChild("Items", 10)
-    local fishList = {}
-    if not ItemsFolder then
-        return {}
-    end
-
-    local children = ItemsFolder:GetChildren()
-    for i, item in ipairs(children) do
-        if item:IsA("ModuleScript") then
+local function ScanAllDatabases()
+    local ItemsFolder = ReplicatedStorage:FindFirstChild("Items")
+    local fishList, stoneList = {}, {}
+    if ItemsFolder then
+        for i, item in ipairs(ItemsFolder:GetChildren()) do
             local ok, module = pcall(require, item)
             if ok and module.Data and module.Data.Name then
                 local n = module.Data.Name
-                local t = module.Data.Type
-                if t == "Fish" then
+                if module.Data.Type == "Fish" then
                     table.insert(fishList, n)
+                elseif n:match("Stone") or n:match("Enchant") or n:match("Relic") or module.Data.Type == "Stone" then
+                    table.insert(stoneList, n)
                 end
             end
-        end
-        -- SAFE YIELDING
-        if i % 100 == 0 then
-            task.wait()
+            if i % 100 == 0 then
+                task.wait()
+            end
         end
     end
-    table.sort(fishList)
-    return fishList
+
+    local mutationList = {}
+    local VariantsFolder = ReplicatedStorage:FindFirstChild("Variants")
+    if VariantsFolder then
+        for i, variantModule in pairs(VariantsFolder:GetChildren()) do
+            local ok, variantData = pcall(require, variantModule)
+            if ok and variantData.Data and variantData.Data.Name then
+                table.insert(mutationList, variantData.Data.Name)
+            end
+            if i % 50 == 0 then
+                task.wait()
+            end
+        end
+    end
+    table.sort(fishList);
+    table.sort(stoneList);
+    table.sort(mutationList)
+    return fishList, stoneList, mutationList
 end
 
 -- ====================================================================
@@ -275,10 +298,10 @@ end
 
 local function TestDebugImage()
     local target = GlobalData.DebugTarget
-    if not target or target == "[ Click Load First ]" then
+    if not target then
         WindUI:Notify({
             Title = "Error",
-            Content = "Pilih Ikan yang valid!",
+            Content = "Pilih Ikan dulu!",
             Icon = "alert-triangle"
         })
         return
@@ -288,12 +311,15 @@ local function TestDebugImage()
         Content = "Fetching: " .. target,
         Icon = "loader"
     })
+
     local url = GetItemImageURL(target)
+
     send(DEBUG_WEBHOOK, {
         username = "GDEV Debugger",
         embeds = {{
             title = "🖼️ DEBUG RESULT",
-            description = "Target: **" .. target .. "**\nURL: " .. (url == DEFAULT_IMAGE and "Default" or "Success"),
+            description = "Target Asli: **" .. target .. "**\nURL Hasil: " ..
+                (url == DEFAULT_IMAGE and "Default (Not Found)" or "Found!"),
             color = 0xE67E22,
             image = {
                 url = url
@@ -421,7 +447,9 @@ local function sendCatchLog(data)
     end
 
     if shouldSend then
+        -- > SMART IMAGE FETCH <
         local dynamicImage = GetItemImageURL(data.Item)
+
         local userTag = GetMentionContent(data.Player)
         local subjectName = (userTag ~= "") and userTag or ("**" .. data.Player .. "**")
         local discordField = (userTag ~= "") and userTag or "N/A"
@@ -446,6 +474,9 @@ local function sendCatchLog(data)
                 }, {
                     name = "❯ 🎲 Chance :",
                     value = "```1 in " .. data.Chance .. "```"
+                }, {
+                    name = "❯ 🆔 Discord :",
+                    value = "```" .. discordField .. "```"
                 }},
                 image = {
                     url = dynamicImage
@@ -481,6 +512,9 @@ local function sendEnchant(data)
             }, {
                 name = "❯🎣 Rod :",
                 value = "```" .. data.Rod .. "```"
+            }, {
+                name = "❯ 🆔 Discord :",
+                value = "```" .. discordField .. "```"
             }},
             image = {
                 url = DEFAULT_IMAGE
@@ -518,9 +552,13 @@ local function sendJoinLeave(player, joined)
                 name = "📅 Account Age",
                 value = player.AccountAge .. " days",
                 inline = true
+            }, {
+                name = "❯ 🆔 Discord",
+                value = "```" .. discordField .. "```",
+                inline = false
             }},
             image = {
-                url = IMAGE_EMBED
+                url = DEFAULT_IMAGE
             },
             footer = {
                 text = "Server Join/Leave Logger"
@@ -534,7 +572,7 @@ end
 -- [7] UI & INIT
 -- ====================================================================
 local Window = WindUI:CreateWindow({
-    Title = "GDEV LOGGER v36.0",
+    Title = "GDEV LOGGER v32.0",
     Icon = "target",
     Author = "10s Area",
     Transparent = true
@@ -550,7 +588,7 @@ Window:EditOpenButton({
     Draggable = true
 })
 Window:Tag({
-    Title = "v36.0 Manual",
+    Title = "v32.0 ImageFix",
     Icon = "github",
     Color = Color3.fromHex("#30ff6a"),
     Radius = 0
@@ -666,10 +704,9 @@ FocusSec:Button({
     end
 })
 
--- DROPDOWN (TRACKER - AUTO LOAD)
 local FishDropdown = FocusSec:Dropdown({
     Title = "Search Fish",
-    Values = {"Loading..."},
+    Values = {"Scanning..."},
     Multi = true,
     Callback = function(list)
         GlobalData.FocusFish = {};
@@ -677,16 +714,15 @@ local FishDropdown = FocusSec:Dropdown({
             list = {list}
         end
         for _, name in pairs(list) do
-            if name ~= "Loading..." then
+            if name ~= "Scanning..." then
                 GlobalData.FocusFish[name] = true
             end
         end
     end
 })
--- DROPDOWN VARIANT (MANUAL)
 local MutationDropdown = FocusSec:Dropdown({
     Title = "Search Mutations",
-    Values = MANUAL_VARIANTS,
+    Values = {"Scanning..."},
     Multi = true,
     Callback = function(list)
         GlobalData.FocusMutations = {};
@@ -694,14 +730,15 @@ local MutationDropdown = FocusSec:Dropdown({
             list = {list}
         end
         for _, name in pairs(list) do
-            GlobalData.FocusMutations[name] = true
+            if name ~= "Scanning..." then
+                GlobalData.FocusMutations[name] = true
+            end
         end
     end
 })
--- DROPDOWN STONE (MANUAL)
 local StoneDropdown = FocusSec:Dropdown({
     Title = "Search Stones",
-    Values = MANUAL_STONES,
+    Values = {"Scanning..."},
     Multi = true,
     Callback = function(list)
         GlobalData.FocusStones = {};
@@ -709,7 +746,9 @@ local StoneDropdown = FocusSec:Dropdown({
             list = {list}
         end
         for _, name in pairs(list) do
-            GlobalData.FocusStones[name] = true
+            if name ~= "Scanning..." then
+                GlobalData.FocusStones[name] = true
+            end
         end
     end
 })
@@ -728,45 +767,18 @@ for _, rarity in ipairs({"Epic", "Legendary", "Mythic", "Secret"}) do
     })
 end
 
--- [[ DEBUG SECTION (MANUAL SCAN) ]] --
 local DebugSec = DebugTab:Section({
     Title = "Image Debugger",
     Icon = "image"
 })
-
--- Dropdown awalnya KOSONG
 local DebugDropdown = DebugSec:Dropdown({
     Title = "Select Item",
-    Values = {"[ Click Load First ]"},
+    Values = {"Scanning..."},
     Multi = false,
     Callback = function(val)
         GlobalData.DebugTarget = val
     end
 })
-
--- Tombol ini yang akan mengisi Dropdown Debug (Agar tidak berat di awal)
-DebugSec:Button({
-    Title = "Load Fish List",
-    Desc = "Klik untuk memunculkan daftar ikan di dropdown atas.",
-    Icon = "refresh-cw",
-    Callback = function()
-        if #GlobalData.ListFish > 0 then
-            DebugDropdown:Refresh(GlobalData.ListFish)
-            WindUI:Notify({
-                Title = "Loaded",
-                Content = "Daftar ikan dimuat!",
-                Icon = "check"
-            })
-        else
-            WindUI:Notify({
-                Title = "Wait",
-                Content = "Database utama sedang scanning...",
-                Icon = "loader"
-            })
-        end
-    end
-})
-
 DebugSec:Button({
     Title = "Check & Send to Discord",
     Desc = "Kirim gambar ke Debug Webhook.",
@@ -782,7 +794,7 @@ local InfoSec = InfoTab:Section({
 })
 InfoSec:Paragraph({
     Title = "GDEV Logger",
-    Desc = "Versi: 36.0 (Manual Debug)\nDeveloper: 10s Area"
+    Desc = "Versi: 32.0 (Smart Image)\nDeveloper: 10s Area"
 })
 InfoSec:Button({
     Title = "Join Discord",
@@ -797,16 +809,11 @@ InfoSec:Button({
     end
 })
 
--- >> SCANNER BACKGROUND (TRACKER ONLY) <<
 task.spawn(function()
-    WindUI:Notify({
-        Title = "System",
-        Content = "Scanning Fish Database...",
-        Icon = "loader"
-    })
-    local fish = ScanFishOnly() -- HANYA SCAN IKAN UTAMA
-    GlobalData.ListFish = fish
-
+    local fish, stones, mutations = ScanAllDatabases()
+    GlobalData.ListFish = fish;
+    GlobalData.ListStones = stones;
+    GlobalData.ListMutations = mutations
     pcall(function()
         if #fish > 0 then
             if FishDropdown.SetValues then
@@ -814,22 +821,30 @@ task.spawn(function()
             elseif FishDropdown.Refresh then
                 FishDropdown:Refresh(fish)
             end
-            -- DebugDropdown TIDAK diisi otomatis disini agar ringan
+            if DebugDropdown.SetValues then
+                DebugDropdown:SetValues(fish)
+            elseif DebugDropdown.Refresh then
+                DebugDropdown:Refresh(fish)
+            end
         end
-        if MutationDropdown.SetValues then
-            MutationDropdown:SetValues(MANUAL_VARIANTS)
-        elseif MutationDropdown.Refresh then
-            MutationDropdown:Refresh(MANUAL_VARIANTS)
+        if #mutations > 0 then
+            if MutationDropdown.SetValues then
+                MutationDropdown:SetValues(mutations)
+            elseif MutationDropdown.Refresh then
+                MutationDropdown:Refresh(mutations)
+            end
         end
-        if StoneDropdown.SetValues then
-            StoneDropdown:SetValues(MANUAL_STONES)
-        elseif StoneDropdown.Refresh then
-            StoneDropdown:Refresh(MANUAL_STONES)
+        if #stones > 0 then
+            if StoneDropdown.SetValues then
+                StoneDropdown:SetValues(stones)
+            elseif StoneDropdown.Refresh then
+                StoneDropdown:Refresh(stones)
+            end
         end
     end)
     WindUI:Notify({
-        Title = "Ready",
-        Content = "Main Database Loaded!",
+        Title = "System Ready",
+        Content = "DB Loaded (v32.0)",
         Icon = "check"
     })
 end)
@@ -892,6 +907,6 @@ Players.PlayerRemoving:Connect(function(p)
 end)
 WindUI:Notify({
     Title = "Success",
-    Content = "GDEV v36.0 Active!",
+    Content = "GDEV v32.0 Active!",
     Icon = "zap"
 })
