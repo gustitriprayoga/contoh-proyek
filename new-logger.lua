@@ -351,19 +351,22 @@ local function sendCatchLog(data)
     end
 
     if shouldSend then
-        -- Ambil Tag Raw
+        -- 1. Ambil Tag (Raw) untuk Ping
         local userTag = GetMentionContent(data.Player)
-        -- Format untuk Deskripsi (Pakai Newline)
-        local descTag = (userTag ~= "") and (userTag .. "\n") or ""
-        -- Format untuk Field (Tanpa Newline, Default N/A)
-        local fieldTag = (userTag ~= "") and userTag or "N/A"
+
+        -- 2. Tentukan Nama Subjek di Deskripsi (Tag jika ada, atau Nama Roblox)
+        local subjectName = (userTag ~= "") and userTag or ("**" .. data.Player .. "**")
+
+        -- 3. Tentukan Isi Field Discord (Tag jika ada, atau "N/A")
+        local discordField = (userTag ~= "") and userTag or "N/A"
 
         send(SETTINGS.WebhookCatch, {
+            content = userTag, -- Ping di luar (Hidden)
             username = WEBHOOK_NAME,
             avatar_url = WEBHOOK_AVATAR,
             embeds = {{
                 title = titleText,
-                description = descTag .. "Selamat Kamu Berhasil Mendapatkan : **" .. data.Item .. "**",
+                description = "Selamat " .. subjectName .. " Kamu Berhasil Mendapatkan : **" .. data.Item .. "**",
                 color = embedColor,
                 fields = {{
                     name = "❯ 👤 Player :",
@@ -378,8 +381,8 @@ local function sendCatchLog(data)
                     name = "❯ 🎲 Chance :",
                     value = "```1 in " .. data.Chance .. "```"
                 }, {
-                    name = "❯ 🆔 Discord :", -- Field Baru
-                    value = "```" .. fieldTag .. "```"
+                    name = "❯ 🆔 Discord :", -- Field Khusus
+                    value = "```" .. discordField .. "```"
                 }},
                 image = {
                     url = IMAGE_EMBED
@@ -395,21 +398,18 @@ local function sendCatchLog(data)
 end
 
 local function sendEnchant(data)
-    -- Ambil Tag
     local userTag = GetMentionContent(data.Player)
-    -- Format Ping untuk Deskripsi (Ada Newline)
-    local descTag = (userTag ~= "") and (userTag .. "\n") or ""
-    -- Format Text untuk Field (Tanpa Newline, Default N/A)
-    local fieldTag = (userTag ~= "") and userTag or "N/A"
+    local subjectName = (userTag ~= "") and userTag or ("**" .. data.Player .. "**")
+
+    -- Logika N/A
+    local discordField = (userTag ~= "") and userTag or "N/A"
 
     send(SETTINGS.WebhookEnchant, {
+        content = userTag,
         username = WEBHOOK_NAME,
-        avatar_url = WEBHOOK_AVATAR,
         embeds = {{
             title = "✨ ENCHANT ROLLED ✨",
-            -- Ping aktif di sini
-            description = descTag .. "**" .. data.Player .. "** Telah Mendapatkan Enchant Baru **" .. data.Enchant ..
-                "**",
+            description = "Selamat " .. subjectName .. " Telah Mendapatkan Enchant Baru **" .. data.Enchant .. "**",
             color = 0xD000FF,
             fields = {{
                 name = "❯ 👤 Player :",
@@ -421,8 +421,8 @@ local function sendEnchant(data)
                 name = "❯ 🎣 Rod :",
                 value = "```" .. data.Rod .. "```"
             }, {
-                name = "❯ 🆔 Discord :", -- Field Tambahan
-                value = "```" .. fieldTag .. "```"
+                name = "❯ 🆔 Discord :",
+                value = "```" .. discordField .. "```"
             }},
             image = {
                 url = IMAGE_EMBED
@@ -444,34 +444,36 @@ local function sendJoinLeave(player, joined)
     local title = joined and "👋 PLAYER TELAH BERGABUNG" or "🚪 PLAYER TELAH KELUAR"
     local color = joined and 0x00FF00 or 0xFF0000
 
-    -- Ambil Tag
     local userTag = GetMentionContent(player.Name)
-    local descTag = (userTag ~= "") and (userTag .. "\n") or ""
-    local fieldTag = (userTag ~= "") and userTag or "N/A"
+
+    -- Format Deskripsi: Tag | Nama (jika ada tag), atau Nama saja
+    local descText = (userTag ~= "") and (userTag .. " | `" .. player.Name .. "`") or ("`" .. player.Name .. "`")
+
+    -- Logika N/A untuk Field
+    local discordField = (userTag ~= "") and userTag or "N/A"
 
     send(SETTINGS.WebhookJoinLeave, {
         username = WEBHOOK_NAME,
-        avatar_url = WEBHOOK_AVATAR,
         embeds = {{
             title = title,
-            description = descTag .. "`" .. player.Name .. "` (" .. player.DisplayName .. ")",
+            description = descText,
             color = color,
             fields = {{
-                name = "❯ 🆔 User ID :",
-                value = "```" .. player.UserId .. "```",
+                name = "❯ 🆔 User ID",
+                value = "`" .. player.UserId .. "`",
                 inline = true
             }, {
-                name = "❯ 📅 Account Age :",
-                value = "```" .. player.AccountAge .. " days```",
+                name = "❯ 📅 Account Age",
+                value = player.AccountAge .. " days",
                 inline = true
             }, {
-                name = "❯ 🆔 Discord :", -- Field Tambahan
-                value = "```" .. fieldTag .. "```",
+                name = "❯ 🆔 Discord",
+                value = "```" .. discordField .. "```",
                 inline = false
             }},
             image = {
                 url = IMAGE_EMBED
-            }, -- Typo 'imgage' diperbaiki jadi 'image'
+            },
             footer = {
                 text = "Server Join/Leave Logger"
             },
