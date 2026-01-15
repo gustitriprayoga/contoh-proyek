@@ -545,27 +545,29 @@ local function sendJoinLeave(player, joined)
     local discordField = (userTag ~= "") and userTag or "N/A"
 
     send(SETTINGS.WebhookJoinLeave, {
-        username = WEBHOOK_NAME,
+        -- username = WEBHOOK_NAME,
+        -- avatar_url = WEBHOOK_AVATAR,
+        description = "👋 PLAYER TELAH BERGABUNG/KELUAR",
         embeds = {{
             title = title,
             description = descText,
             color = color,
             fields = { -- 1. Display Name
             {
-                name = "❯ | 📛 Display Name",
+                name = "❯ 📛 Display Name",
                 value = "```" .. player.DisplayName .. "```",
                 inline = false
             }, -- 2. Player Name (Username)
             {
-                name = "❯ | 👤 Username",
+                name = "❯ 👤 Username",
                 value = "```" .. player.Name .. "```",
                 inline = false
             }, {
-                name = "❯ | 📅 Account Age",
+                name = "❯ 📅 Account Age",
                 value = "```" .. player.AccountAge .. " days```",
                 inline = false
             }, {
-                name = "❯ | 🆔 Discord",
+                name = "❯ 🆔 Discord",
                 value = "```" .. discordField .. "```",
                 inline = false
             }},

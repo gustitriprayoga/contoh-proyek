@@ -1,11 +1,7 @@
-local g0 = {
-    Players = game:GetService("Players"),
-    RunService = game:GetService("RunService"),
-    HttpService = game:GetService("HttpService"),
-    RS = game:GetService("ReplicatedStorage"),
-    VIM = game:GetService("VirtualInputManager"),
-    PG = game:GetService("Players").LocalPlayer.PlayerGui,
-    Camera = workspace.CurrentCamera,
-    GuiService = game:GetService("GuiService"),
-    CoreGui = game:GetService("CoreGui")
-}
+local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
+
+local Window = WindUI:Window({
+    Title = "10s Dev |",
+    Footer = "made by @G",
+    Version = 1
+})
