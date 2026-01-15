@@ -1,5 +1,5 @@
 -- ====================================================================
--- GDEV LOGGER v32.1 - CASE SENSITIVE FIX & SMART VARIANT CLEANER
+-- GDEV LOGGER v32.0 - MANUAL VARIANT & SMART IMAGE
 -- ====================================================================
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
@@ -50,10 +50,17 @@ local SETTINGS = {
 local WEBHOOK_NAME = "10s Area"
 local WEBHOOK_AVATAR = "https://cdn.discordapp.com/attachments/1452251463337377902/1456009509632737417/GDEV_New.png"
 
+-- [[ MANUAL VARIANT LIST (REQUESTED) ]]
+local MANUAL_VARIANTS = {"1x1x1x1", "ALBINO", "ARTIC FROST", "BLOODMOON", "COLOR BURN", "CORRUPT", "DISCO",
+                         "FAIRY DUST", "FESTIVE", "FROZEN", "GALAXY", "GEMSTONE", "GHOST", "GOLD", "HOLOGRAPHIC",
+                         "LEVIATHAN'S RAGE", "LIGHTNING", "MIDNIGHT", "NOOB", "RADIOACTIVE", "SANDY", "STONE"}
+-- Kita sort agar rapi di dropdown
+table.sort(MANUAL_VARIANTS)
+
 local GlobalData = {
     ListFish = {},
     ListStones = {},
-    ListMutations = {},
+    ListMutations = MANUAL_VARIANTS, -- Menggunakan List Manual
     FocusFish = {},
     FocusMutations = {},
     FocusStones = {},
@@ -121,7 +128,7 @@ local RARITY_CONFIG = {
 }
 
 -- ====================================================================
--- [3] IMAGE SYSTEM (SMART MATCHER FIX)
+-- [3] IMAGE SYSTEM (SMART MATCHER)
 -- ====================================================================
 local function getThumbnailURL(assetString)
     if not assetString then
@@ -156,35 +163,6 @@ local function ExtractIDFromModule(moduleInstance)
     return nil
 end
 
--- [[ FIXED: CLEAN NAME (CASE INSENSITIVE) ]] --
-local function CleanItemName(fullName)
-    -- Kita pisahkan kalimat menjadi kata-kata (split by space)
-    -- Lalu cek setiap kata, apakah ada di database Variant (secara case insensitive)
-    -- Jika ada, buang kata itu. Sisanya digabung kembali.
-
-    local parts = string.split(fullName, " ")
-    local cleanParts = {}
-
-    for _, part in ipairs(parts) do
-        local isVariant = false
-        for _, knownVariant in pairs(GlobalData.ListMutations) do
-            -- Bandingkan lowercase vs lowercase (Contoh: "gemstone" == "gemstone")
-            if string.lower(part) == string.lower(knownVariant) then
-                isVariant = true
-                break
-            end
-        end
-
-        -- Jika bukan variant, masukkan ke nama bersih
-        if not isVariant then
-            table.insert(cleanParts, part)
-        end
-    end
-
-    -- Gabung kembali sisa kata (Contoh: "Ruby")
-    return table.concat(cleanParts, " ")
-end
-
 -- [[ FUNGSI PENCARI GAMBAR PINTAR ]] --
 local function GetItemImageURL(itemName)
     local ItemsFolder = ReplicatedStorage:FindFirstChild("Items")
@@ -201,10 +179,16 @@ local function GetItemImageURL(itemName)
         end
     end
 
-    -- 2. Coba Bersihkan Nama dari Variant (Ex: "GEMSTONE Ruby" -> "Ruby")
-    local cleanName = CleanItemName(itemName)
-    local cleanModule = ItemsFolder:FindFirstChild(cleanName)
+    -- 2. Coba Bersihkan Nama dari Variant
+    local cleanName = itemName
+    for _, variantName in pairs(GlobalData.ListMutations) do
+        -- Hapus kata variant (Case sensitive sesuai database manual)
+        cleanName = cleanName:gsub(variantName, "")
+    end
+    -- Hapus spasi berlebih di awal/akhir
+    cleanName = cleanName:gsub("^%s*(.-)%s*$", "%1")
 
+    local cleanModule = ItemsFolder:FindFirstChild(cleanName)
     if cleanModule then
         local rawId = ExtractIDFromModule(cleanModule)
         if rawId then
@@ -212,16 +196,12 @@ local function GetItemImageURL(itemName)
         end
     end
 
-    -- 3. (Fallback) Fuzzy Search Case Insensitive
-    -- Jika nama bersih masih belum ketemu, coba cari di items folder yang mengandung nama bersih
+    -- 3. (Fallback) Fuzzy Search
     for _, itemMod in pairs(ItemsFolder:GetChildren()) do
-        if string.find(string.lower(itemName), string.lower(itemMod.Name)) then
-            -- Pastikan bukan match yang terlalu pendek (misal "a" match "Catfish")
-            if #itemMod.Name > 3 then
-                local rawId = ExtractIDFromModule(itemMod)
-                if rawId then
-                    return getThumbnailURL(tostring(rawId)) or DEFAULT_IMAGE
-                end
+        if #itemMod.Name > 3 and string.find(itemName, itemMod.Name) then
+            local rawId = ExtractIDFromModule(itemMod)
+            if rawId then
+                return getThumbnailURL(tostring(rawId)) or DEFAULT_IMAGE
             end
         end
     end
@@ -230,11 +210,12 @@ local function GetItemImageURL(itemName)
 end
 
 -- ====================================================================
--- [4] DATABASE SCANNER
+-- [4] DATABASE SCANNER (Modified for Manual Variants)
 -- ====================================================================
 local function ScanAllDatabases()
     local ItemsFolder = ReplicatedStorage:FindFirstChild("Items")
     local fishList, stoneList = {}, {}
+
     if ItemsFolder then
         for i, item in ipairs(ItemsFolder:GetChildren()) do
             local ok, module = pcall(require, item)
@@ -252,22 +233,13 @@ local function ScanAllDatabases()
         end
     end
 
-    local mutationList = {}
-    local VariantsFolder = ReplicatedStorage:FindFirstChild("Variants")
-    if VariantsFolder then
-        for i, variantModule in pairs(VariantsFolder:GetChildren()) do
-            local ok, variantData = pcall(require, variantModule)
-            if ok and variantData.Data and variantData.Data.Name then
-                table.insert(mutationList, variantData.Data.Name)
-            end
-            if i % 50 == 0 then
-                task.wait()
-            end
-        end
-    end
-    table.sort(fishList);
-    table.sort(stoneList);
-    table.sort(mutationList)
+    -- KITA GUNAKAN LIST MANUAL, JADI BAGIAN SCAN VARIANTS DI-SKIP AGAR LEBIH CEPAT
+    local mutationList = MANUAL_VARIANTS
+
+    table.sort(fishList)
+    table.sort(stoneList)
+    -- mutationList sudah di sort di atas
+
     return fishList, stoneList, mutationList
 end
 
@@ -410,7 +382,7 @@ local function detectEnchantData(text)
 end
 
 -- ====================================================================
--- [6] SEND LOGIC (FIXED CASE SENSITIVE)
+-- [6] SEND LOGIC
 -- ====================================================================
 local function IsItemFocused(itemName)
     if not SETTINGS.FocusFilterEnabled then
@@ -420,13 +392,8 @@ local function IsItemFocused(itemName)
         return false
     end
 
-    -- Konversi item name yang didapat ke lowercase agar cocok dengan filter
-    local lowerItemName = string.lower(itemName)
-
-    -- Cek Batu
     for target, _ in pairs(GlobalData.FocusStones) do
-        -- Bandingkan dengan lowercase target juga
-        if string.find(lowerItemName, string.lower(target)) then
+        if string.find(itemName, target) then
             return true
         end
     end
@@ -434,19 +401,16 @@ local function IsItemFocused(itemName)
     local fishSel, fishMat = false, false
     local mutSel, mutMat = false, false
 
-    -- Cek Ikan
     for target, _ in pairs(GlobalData.FocusFish) do
         fishSel = true;
-        if string.find(lowerItemName, string.lower(target)) then
+        if string.find(itemName, target) then
             fishMat = true;
             break
         end
     end
-
-    -- Cek Mutasi
     for target, _ in pairs(GlobalData.FocusMutations) do
         mutSel = true;
-        if string.find(lowerItemName, string.lower(target)) then
+        if string.find(itemName, target) then
             mutMat = true;
             break
         end
@@ -488,7 +452,6 @@ local function sendCatchLog(data)
         local discordField = (userTag ~= "") and userTag or "N/A"
 
         send(SETTINGS.WebhookCatch, {
-            -- content = userTag,
             username = WEBHOOK_NAME,
             avatar_url = WEBHOOK_AVATAR,
             embeds = {{
@@ -497,25 +460,25 @@ local function sendCatchLog(data)
                 color = embedColor,
                 fields = { -- 1. Display Name
                 {
-                    name = "❯ 📛 Display Name",
+                    name = "❯ | 📛 Display Name",
                     value = "```" .. player.DisplayName .. "```",
                     inline = false
                 }, -- 2. Player Name (Username)
                 {
-                    name = "❯ 👤 Username",
+                    name = "❯ | 👤 Username",
                     value = "```" .. player.Name .. "```",
                     inline = false
                 }, {
-                    name = "❯ 🐟 Item/Fish :",
+                    name = "❯ | 🐟 Item/Fish :",
                     value = "```" .. data.Item .. "```"
                 }, {
-                    name = "❯ ⚖️ Weight :",
+                    name = "❯ | ⚖️ Weight :",
                     value = "```" .. data.Weight .. "```"
                 }, {
-                    name = "❯ 🎲 Chance :",
+                    name = "❯ | 🎲 Chance :",
                     value = "```1 in " .. data.Chance .. "```"
                 }, {
-                    name = "❯ 🆔 Discord :",
+                    name = "❯ | 🆔 Discord :",
                     value = "```" .. discordField .. "```"
                 }},
                 image = {
@@ -537,7 +500,6 @@ local function sendEnchant(data)
     local discordField = (userTag ~= "") and userTag or "N/A"
 
     send(SETTINGS.WebhookEnchant, {
-        content = userTag,
         username = WEBHOOK_NAME,
         embeds = {{
             title = "✨ ENCHANT ROLLED ✨",
@@ -545,27 +507,24 @@ local function sendEnchant(data)
             color = 0xD000FF,
             fields = { -- 1. Display Name
             {
-                name = "❯ 📛 Display Name",
+                name = "❯ | 📛 Display Name",
                 value = "```" .. player.DisplayName .. "```",
                 inline = false
             }, -- 2. Player Name (Username)
             {
-                name = "❯ 👤 Username",
+                name = "❯ | 👤 Username",
                 value = "```" .. player.Name .. "```",
                 inline = false
             }, {
-                name = "❯🔮 Enchant :",
+                name = "❯ | 🔮 Enchant :",
                 value = "```" .. data.Enchant .. "```"
             }, {
-                name = "❯🎣 Rod :",
+                name = "❯ | 🎣 Rod :",
                 value = "```" .. data.Rod .. "```"
             }, {
-                name = "❯ 🆔 Discord :",
+                name = "❯ | 🆔 Discord :",
                 value = "```" .. discordField .. "```"
             }},
-            image = {
-                url = DEFAULT_IMAGE
-            },
             footer = {
                 text = "10s Area • Enchant Logger",
                 inline = true
@@ -579,39 +538,35 @@ local function sendJoinLeave(player, joined)
     if not SETTINGS.LogJoinLeave then
         return
     end
-
     local title = joined and "👋 PLAYER TELAH BERGABUNG" or "🚪 PLAYER TELAH KELUAR"
     local color = joined and 0x00FF00 or 0xFF0000
-
-    -- Ambil Tag Discord untuk ditampilkan di deskripsi
     local userTag = GetMentionContent(player.Name)
-    local discordText = (userTag ~= "") and userTag or "N/A"
+    local descText = (userTag ~= "") and (userTag .. " | `" .. player.Name .. "`") or ("`" .. player.Name .. "`")
+    local discordField = (userTag ~= "") and userTag or "N/A"
 
     send(SETTINGS.WebhookJoinLeave, {
         username = WEBHOOK_NAME,
         embeds = {{
             title = title,
-            description = "Discord: " .. discordText, -- Info Discord Link
+            description = descText,
             color = color,
             fields = { -- 1. Display Name
             {
-                name = "❯ 📛 Display Name",
+                name = "❯ | 📛 Display Name",
                 value = "```" .. player.DisplayName .. "```",
                 inline = false
             }, -- 2. Player Name (Username)
             {
-                name = "❯ 👤 Username",
+                name = "❯ | 👤 Username",
                 value = "```" .. player.Name .. "```",
                 inline = false
-            }, -- 3. Account Age
-            {
-                name = "❯ 📅 Account Age",
+            }, {
+                name = "❯ | 📅 Account Age",
                 value = "```" .. player.AccountAge .. " days```",
                 inline = false
-            }, -- Extra: User ID (Penting untuk Admin/Ban)
-            {
-                name = "❯ 🆔 User ID",
-                value = "```" .. player.UserId .. "```",
+            }, {
+                name = "❯ | 🆔 Discord",
+                value = "```" .. discordField .. "```",
                 inline = false
             }},
             footer = {
@@ -626,7 +581,7 @@ end
 -- [7] UI & INIT
 -- ====================================================================
 local Window = WindUI:CreateWindow({
-    Title = "GDEV LOGGER v32.1",
+    Title = "GDEV LOGGER v32.0",
     Icon = "target",
     Author = "10s Area",
     Transparent = true
@@ -642,7 +597,7 @@ Window:EditOpenButton({
     Draggable = true
 })
 Window:Tag({
-    Title = "v32.1 CaseFix",
+    Title = "v32.0 Manual",
     Icon = "github",
     Color = Color3.fromHex("#30ff6a"),
     Radius = 0
@@ -774,9 +729,10 @@ local FishDropdown = FocusSec:Dropdown({
         end
     end
 })
+-- MENGGUNAKAN MANUAL VARIANTS DI DROPDOWN
 local MutationDropdown = FocusSec:Dropdown({
     Title = "Search Mutations",
-    Values = {"Scanning..."},
+    Values = MANUAL_VARIANTS,
     Multi = true,
     Callback = function(list)
         GlobalData.FocusMutations = {};
@@ -784,9 +740,7 @@ local MutationDropdown = FocusSec:Dropdown({
             list = {list}
         end
         for _, name in pairs(list) do
-            if name ~= "Scanning..." then
-                GlobalData.FocusMutations[name] = true
-            end
+            GlobalData.FocusMutations[name] = true
         end
     end
 })
@@ -848,7 +802,7 @@ local InfoSec = InfoTab:Section({
 })
 InfoSec:Paragraph({
     Title = "GDEV Logger",
-    Desc = "Versi: 32.1 (Case Fix)\nDeveloper: 10s Area"
+    Desc = "Versi: 32.0 (Manual Variant)\nDeveloper: 10s Area"
 })
 InfoSec:Button({
     Title = "Join Discord",
@@ -867,7 +821,8 @@ task.spawn(function()
     local fish, stones, mutations = ScanAllDatabases()
     GlobalData.ListFish = fish;
     GlobalData.ListStones = stones;
-    GlobalData.ListMutations = mutations
+    -- GlobalData.ListMutations sudah diisi manual di atas
+
     pcall(function()
         if #fish > 0 then
             if FishDropdown.SetValues then
@@ -881,13 +836,7 @@ task.spawn(function()
                 DebugDropdown:Refresh(fish)
             end
         end
-        if #mutations > 0 then
-            if MutationDropdown.SetValues then
-                MutationDropdown:SetValues(mutations)
-            elseif MutationDropdown.Refresh then
-                MutationDropdown:Refresh(mutations)
-            end
-        end
+        -- Refresh Stone Dropdown
         if #stones > 0 then
             if StoneDropdown.SetValues then
                 StoneDropdown:SetValues(stones)
@@ -895,10 +844,11 @@ task.spawn(function()
                 StoneDropdown:Refresh(stones)
             end
         end
+        -- Mutation Dropdown sudah pakai list manual
     end)
     WindUI:Notify({
         Title = "System Ready",
-        Content = "DB Loaded (v32.1)",
+        Content = "DB Loaded (v32.0)",
         Icon = "check"
     })
 end)
@@ -961,6 +911,6 @@ Players.PlayerRemoving:Connect(function(p)
 end)
 WindUI:Notify({
     Title = "Success",
-    Content = "GDEV v32.1 Active!",
+    Content = "GDEV v32.0 Active!",
     Icon = "zap"
 })
