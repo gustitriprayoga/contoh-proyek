@@ -1,7 +1,8 @@
-local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
+local WindUI = loadstring(game:HttpGet(
+    "https://raw.githubusercontent.com/gustitriprayoga/contoh-proyek/refs/heads/main/logger-v1.lua"))()
 
-local Window = WindUI:Window({
-    Title = "10s Dev |",
-    Footer = "made by @G",
-    Version = 1
+local Window = WindUI:CreateWindow({
+    Title = "My Super Hub",
+    Icon = "door-open", -- lucide icon. optional
+    Author = "by .ftgs and .ftgs" -- optional
 })
