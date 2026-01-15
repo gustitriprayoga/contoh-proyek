@@ -1,5 +1,5 @@
 -- ====================================================================
--- GDEV LOGGER v32.0 - SMART IMAGE MATCHER (VARIANT FIX)
+-- GDEV LOGGER v32.1 - CASE SENSITIVE FIX & SMART VARIANT CLEANER
 -- ====================================================================
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
@@ -29,7 +29,7 @@ local USER_MAPPING = {
     ["Ti4JAV"] = "425852550672023552",
     ["Lya4JAV"] = "425852550672023552",
     ["Clay4JAV"] = "425852550672023552",
-    ["AbgRIchOmon"] = "592612835960422411",
+    ["AbgRichOmon"] = "592612835960422411",
     ["PriaTerzolimi22"] = "592612835960422411",
     ["NanikAAA4JAV"] = "592612835960422411",
     ["Hana4JAV"] = "592612835960422411"
@@ -121,7 +121,7 @@ local RARITY_CONFIG = {
 }
 
 -- ====================================================================
--- [3] IMAGE SYSTEM (SMART MATCHER)
+-- [3] IMAGE SYSTEM (SMART MATCHER FIX)
 -- ====================================================================
 local function getThumbnailURL(assetString)
     if not assetString then
@@ -156,6 +156,35 @@ local function ExtractIDFromModule(moduleInstance)
     return nil
 end
 
+-- [[ FIXED: CLEAN NAME (CASE INSENSITIVE) ]] --
+local function CleanItemName(fullName)
+    -- Kita pisahkan kalimat menjadi kata-kata (split by space)
+    -- Lalu cek setiap kata, apakah ada di database Variant (secara case insensitive)
+    -- Jika ada, buang kata itu. Sisanya digabung kembali.
+
+    local parts = string.split(fullName, " ")
+    local cleanParts = {}
+
+    for _, part in ipairs(parts) do
+        local isVariant = false
+        for _, knownVariant in pairs(GlobalData.ListMutations) do
+            -- Bandingkan lowercase vs lowercase (Contoh: "gemstone" == "gemstone")
+            if string.lower(part) == string.lower(knownVariant) then
+                isVariant = true
+                break
+            end
+        end
+
+        -- Jika bukan variant, masukkan ke nama bersih
+        if not isVariant then
+            table.insert(cleanParts, part)
+        end
+    end
+
+    -- Gabung kembali sisa kata (Contoh: "Ruby")
+    return table.concat(cleanParts, " ")
+end
+
 -- [[ FUNGSI PENCARI GAMBAR PINTAR ]] --
 local function GetItemImageURL(itemName)
     local ItemsFolder = ReplicatedStorage:FindFirstChild("Items")
@@ -172,16 +201,10 @@ local function GetItemImageURL(itemName)
         end
     end
 
-    -- 2. Coba Bersihkan Nama dari Variant (Ex: "Shiny Angler Fish" -> "Angler Fish")
-    local cleanName = itemName
-    for _, variantName in pairs(GlobalData.ListMutations) do
-        -- Hapus kata variant (Case sensitive sesuai database)
-        cleanName = cleanName:gsub(variantName, "")
-    end
-    -- Hapus spasi berlebih di awal/akhir
-    cleanName = cleanName:gsub("^%s*(.-)%s*$", "%1")
-
+    -- 2. Coba Bersihkan Nama dari Variant (Ex: "GEMSTONE Ruby" -> "Ruby")
+    local cleanName = CleanItemName(itemName)
     local cleanModule = ItemsFolder:FindFirstChild(cleanName)
+
     if cleanModule then
         local rawId = ExtractIDFromModule(cleanModule)
         if rawId then
@@ -189,14 +212,16 @@ local function GetItemImageURL(itemName)
         end
     end
 
-    -- 3. (Fallback) Coba cari items yang namanya ada di dalam string tangkapan
-    -- Contoh: Tangkapan "Big Albino Shark", di database ada "Shark".
+    -- 3. (Fallback) Fuzzy Search Case Insensitive
+    -- Jika nama bersih masih belum ketemu, coba cari di items folder yang mengandung nama bersih
     for _, itemMod in pairs(ItemsFolder:GetChildren()) do
-        -- Pastikan nama item lebih panjang dari 3 huruf agar tidak salah match
-        if #itemMod.Name > 3 and string.find(itemName, itemMod.Name) then
-            local rawId = ExtractIDFromModule(itemMod)
-            if rawId then
-                return getThumbnailURL(tostring(rawId)) or DEFAULT_IMAGE
+        if string.find(string.lower(itemName), string.lower(itemMod.Name)) then
+            -- Pastikan bukan match yang terlalu pendek (misal "a" match "Catfish")
+            if #itemMod.Name > 3 then
+                local rawId = ExtractIDFromModule(itemMod)
+                if rawId then
+                    return getThumbnailURL(tostring(rawId)) or DEFAULT_IMAGE
+                end
             end
         end
     end
@@ -385,7 +410,7 @@ local function detectEnchantData(text)
 end
 
 -- ====================================================================
--- [6] SEND LOGIC
+-- [6] SEND LOGIC (FIXED CASE SENSITIVE)
 -- ====================================================================
 local function IsItemFocused(itemName)
     if not SETTINGS.FocusFilterEnabled then
@@ -395,8 +420,13 @@ local function IsItemFocused(itemName)
         return false
     end
 
+    -- Konversi item name yang didapat ke lowercase agar cocok dengan filter
+    local lowerItemName = string.lower(itemName)
+
+    -- Cek Batu
     for target, _ in pairs(GlobalData.FocusStones) do
-        if string.find(itemName, target) then
+        -- Bandingkan dengan lowercase target juga
+        if string.find(lowerItemName, string.lower(target)) then
             return true
         end
     end
@@ -404,16 +434,19 @@ local function IsItemFocused(itemName)
     local fishSel, fishMat = false, false
     local mutSel, mutMat = false, false
 
+    -- Cek Ikan
     for target, _ in pairs(GlobalData.FocusFish) do
         fishSel = true;
-        if string.find(itemName, target) then
+        if string.find(lowerItemName, string.lower(target)) then
             fishMat = true;
             break
         end
     end
+
+    -- Cek Mutasi
     for target, _ in pairs(GlobalData.FocusMutations) do
         mutSel = true;
-        if string.find(itemName, target) then
+        if string.find(lowerItemName, string.lower(target)) then
             mutMat = true;
             break
         end
@@ -462,9 +495,16 @@ local function sendCatchLog(data)
                 title = titleText,
                 description = "Selamat " .. subjectName .. " Kamu Berhasil Mendapatkan : **" .. data.Item .. "**",
                 color = embedColor,
-                fields = {{
-                    name = "❯ 👤 Player :",
-                    value = "```" .. data.Player .. "```"
+                fields = { -- 1. Display Name
+                {
+                    name = "❯ 📛 Display Name",
+                    value = "```" .. player.DisplayName .. "```",
+                    inline = false
+                }, -- 2. Player Name (Username)
+                {
+                    name = "❯ 👤 Username",
+                    value = "```" .. player.Name .. "```",
+                    inline = false
                 }, {
                     name = "❯ 🐟 Item/Fish :",
                     value = "```" .. data.Item .. "```"
@@ -474,6 +514,9 @@ local function sendCatchLog(data)
                 }, {
                     name = "❯ 🎲 Chance :",
                     value = "```1 in " .. data.Chance .. "```"
+                }, {
+                    name = "❯ 🆔 Discord :",
+                    value = "```" .. discordField .. "```"
                 }},
                 image = {
                     url = dynamicImage
@@ -494,21 +537,31 @@ local function sendEnchant(data)
     local discordField = (userTag ~= "") and userTag or "N/A"
 
     send(SETTINGS.WebhookEnchant, {
-        -- content = userTag,
+        content = userTag,
         username = WEBHOOK_NAME,
         embeds = {{
             title = "✨ ENCHANT ROLLED ✨",
             description = "Selamat " .. subjectName .. " Telah Mendapatkan Enchant Baru **" .. data.Enchant .. "**",
             color = 0xD000FF,
-            fields = {{
-                name = "❯👤 Player :",
-                value = "```" .. data.Player .. "```"
+            fields = { -- 1. Display Name
+            {
+                name = "❯ 📛 Display Name",
+                value = "```" .. player.DisplayName .. "```",
+                inline = false
+            }, -- 2. Player Name (Username)
+            {
+                name = "❯ 👤 Username",
+                value = "```" .. player.Name .. "```",
+                inline = false
             }, {
                 name = "❯🔮 Enchant :",
                 value = "```" .. data.Enchant .. "```"
             }, {
                 name = "❯🎣 Rod :",
                 value = "```" .. data.Rod .. "```"
+            }, {
+                name = "❯ 🆔 Discord :",
+                value = "```" .. discordField .. "```"
             }},
             image = {
                 url = DEFAULT_IMAGE
@@ -526,30 +579,41 @@ local function sendJoinLeave(player, joined)
     if not SETTINGS.LogJoinLeave then
         return
     end
+
     local title = joined and "👋 PLAYER TELAH BERGABUNG" or "🚪 PLAYER TELAH KELUAR"
     local color = joined and 0x00FF00 or 0xFF0000
+
+    -- Ambil Tag Discord untuk ditampilkan di deskripsi
     local userTag = GetMentionContent(player.Name)
-    local descText = (userTag ~= "") and (userTag .. " | `" .. player.Name .. "`") or ("`" .. player.Name .. "`")
-    local discordField = (userTag ~= "") and userTag or "N/A"
+    local discordText = (userTag ~= "") and userTag or "N/A"
 
     send(SETTINGS.WebhookJoinLeave, {
         username = WEBHOOK_NAME,
         embeds = {{
             title = title,
-            description = descText,
+            description = "Discord: " .. discordText, -- Info Discord Link
             color = color,
-            fields = {{
-                name = "🆔 User ID",
-                value = "`" .. player.UserId .. "`",
-                inline = true
-            }, {
-                name = "📅 Account Age",
-                value = player.AccountAge .. " days",
-                inline = true
+            fields = { -- 1. Display Name
+            {
+                name = "❯ 📛 Display Name",
+                value = "```" .. player.DisplayName .. "```",
+                inline = false
+            }, -- 2. Player Name (Username)
+            {
+                name = "❯ 👤 Username",
+                value = "```" .. player.Name .. "```",
+                inline = false
+            }, -- 3. Account Age
+            {
+                name = "❯ 📅 Account Age",
+                value = "```" .. player.AccountAge .. " days```",
+                inline = false
+            }, -- Extra: User ID (Penting untuk Admin/Ban)
+            {
+                name = "❯ 🆔 User ID",
+                value = "```" .. player.UserId .. "```",
+                inline = false
             }},
-            image = {
-                url = DEFAULT_IMAGE
-            },
             footer = {
                 text = "Server Join/Leave Logger"
             },
@@ -562,7 +626,7 @@ end
 -- [7] UI & INIT
 -- ====================================================================
 local Window = WindUI:CreateWindow({
-    Title = "GDEV LOGGER v32.0",
+    Title = "GDEV LOGGER v32.1",
     Icon = "target",
     Author = "10s Area",
     Transparent = true
@@ -578,7 +642,7 @@ Window:EditOpenButton({
     Draggable = true
 })
 Window:Tag({
-    Title = "v32.0 ImageFix",
+    Title = "v32.1 CaseFix",
     Icon = "github",
     Color = Color3.fromHex("#30ff6a"),
     Radius = 0
@@ -784,7 +848,7 @@ local InfoSec = InfoTab:Section({
 })
 InfoSec:Paragraph({
     Title = "GDEV Logger",
-    Desc = "Versi: 32.0 (Smart Image)\nDeveloper: 10s Area"
+    Desc = "Versi: 32.1 (Case Fix)\nDeveloper: 10s Area"
 })
 InfoSec:Button({
     Title = "Join Discord",
@@ -834,7 +898,7 @@ task.spawn(function()
     end)
     WindUI:Notify({
         Title = "System Ready",
-        Content = "DB Loaded (v32.0)",
+        Content = "DB Loaded (v32.1)",
         Icon = "check"
     })
 end)
@@ -897,6 +961,6 @@ Players.PlayerRemoving:Connect(function(p)
 end)
 WindUI:Notify({
     Title = "Success",
-    Content = "GDEV v32.0 Active!",
+    Content = "GDEV v32.1 Active!",
     Icon = "zap"
 })
