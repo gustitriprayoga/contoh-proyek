@@ -444,12 +444,15 @@ local function sendCatchLog(data)
     end
 
     if shouldSend then
-        -- > SMART IMAGE FETCH <
         local dynamicImage = GetItemImageURL(data.Item)
-
         local userTag = GetMentionContent(data.Player)
         local subjectName = (userTag ~= "") and userTag or ("**" .. data.Player .. "**")
         local discordField = (userTag ~= "") and userTag or "N/A"
+
+        -- [[ FIX NIL ERROR: AMBIL DATA PLAYER ]] --
+        local playerObj = Players:FindFirstChild(data.Player)
+        local displayName = playerObj and playerObj.DisplayName or data.Player -- Fallback ke nama biasa jika nil
+        local userName = playerObj and playerObj.Name or data.Player
 
         send(SETTINGS.WebhookCatch, {
             username = WEBHOOK_NAME,
@@ -458,15 +461,13 @@ local function sendCatchLog(data)
                 title = titleText,
                 description = "Selamat " .. subjectName .. " Kamu Berhasil Mendapatkan : **" .. data.Item .. "**",
                 color = embedColor,
-                fields = { -- 1. Display Name
-                {
+                fields = {{
                     name = "❯ | 📛 Display Name",
-                    value = "```" .. player.DisplayName .. "```",
+                    value = "```" .. displayName .. "```",
                     inline = false
-                }, -- 2. Player Name (Username)
-                {
+                }, {
                     name = "❯ | 👤 Username",
-                    value = "```" .. player.Name .. "```",
+                    value = "```" .. userName .. "```",
                     inline = false
                 }, {
                     name = "❯ | 🐟 Item/Fish :",
@@ -499,21 +500,24 @@ local function sendEnchant(data)
     local subjectName = (userTag ~= "") and userTag or ("**" .. data.Player .. "**")
     local discordField = (userTag ~= "") and userTag or "N/A"
 
+    -- [[ FIX NIL ERROR: AMBIL DATA PLAYER ]] --
+    local playerObj = Players:FindFirstChild(data.Player)
+    local displayName = playerObj and playerObj.DisplayName or data.Player
+    local userName = playerObj and playerObj.Name or data.Player
+
     send(SETTINGS.WebhookEnchant, {
         username = WEBHOOK_NAME,
         embeds = {{
             title = "✨ ENCHANT ROLLED ✨",
             description = "Selamat " .. subjectName .. " Telah Mendapatkan Enchant Baru **" .. data.Enchant .. "**",
             color = 0xD000FF,
-            fields = { -- 1. Display Name
-            {
+            fields = {{
                 name = "❯ | 📛 Display Name",
-                value = "```" .. player.DisplayName .. "```",
+                value = "```" .. displayName .. "```",
                 inline = false
-            }, -- 2. Player Name (Username)
-            {
+            }, {
                 name = "❯ | 👤 Username",
-                value = "```" .. player.Name .. "```",
+                value = "```" .. userName .. "```",
                 inline = false
             }, {
                 name = "❯ | 🔮 Enchant :",
@@ -525,6 +529,9 @@ local function sendEnchant(data)
                 name = "❯ | 🆔 Discord :",
                 value = "```" .. discordField .. "```"
             }},
+            image = {
+                url = DEFAULT_IMAGE
+            },
             footer = {
                 text = "10s Area • Enchant Logger",
                 inline = true
